@@ -5,6 +5,7 @@ slowly porting from rust.
 ### features
 
  - vga frame buffer
+ - ps2 keyboard driver
  - interrupts
  - todo: terminal console
  - todo: memory mapping

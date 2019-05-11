@@ -5,6 +5,7 @@ KERNEL=build/bzImage
 
 qemu() {
     start() {
+        killqemu
         sudo qemu-system-i386\
             -kernel ${KERNEL}\
             -gdb tcp::${QEMU_GDB_PORT}\
@@ -16,6 +17,10 @@ qemu() {
 
     monitor() {
         sudo ${QEMU_MONITOR}
+    }
+
+    killqemu() {
+        sudo pkill -9 qemu
     }
 
     reload() {

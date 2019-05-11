@@ -7,7 +7,8 @@ SECTIONS {
 	. = 0xb8000;
 	. += 80 * 25 * 2;
 
-	. = 1M;
+	. = 0x100000;
+
 	/* ensure that the multiboot header is at the beginning */
 	.multiboot :
 	{
