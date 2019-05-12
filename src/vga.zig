@@ -1,6 +1,7 @@
 const builtin = @import("builtin");
 const mem = @import("std").mem;
 const arch = @import("arch/x86/lib/index.zig");
+const std = @import("std");
 
 // VRAM buffer address in physical memory.
 pub const VRAM_ADDR = 0xB8000;
@@ -9,6 +10,7 @@ pub const VRAM_SIZE = 0x8000;
 pub const VGA_WIDTH = 80;
 pub const VGA_HEIGHT = 25;
 pub const VGA_SIZE = VGA_WIDTH * VGA_HEIGHT;
+pub var vga = VGA.init(VRAM_ADDR);
 
 // Color codes.
 pub const Color = enum(u4) {
@@ -51,6 +53,15 @@ pub fn enableCursor() void {
 pub fn disableCursor() void {
     outb(0x3D4, 0x0A);
     outb(0x3D5, 1 << 5);
+}
+
+const Errors = error{};
+pub fn printf(comptime format: []const u8, args: ...) void {
+    var a = std.fmt.format({}, Errors, printCallback, format, args);
+}
+
+fn printCallback(context: void, string: []const u8) Errors!void {
+    vga.writeString(string);
 }
 
 // VGA status.
@@ -116,8 +127,9 @@ pub const VGA = struct {
             // FIXME: hardcoded 8 here is horrible.
             8 => {
                 self.cursor -= 1;
-                self.writeChar(' ');
-                self.cursor -= 1;
+                // self.writeChar(' ');
+                self.vram[self.cursor] = self.entry(' ');
+                // self.cursor -= 1;
             },
             // Any other character.
             else => {
@@ -125,6 +137,7 @@ pub const VGA = struct {
                 self.cursor += 1;
             },
         }
+        self.updateCursor();
     }
 
     ////
@@ -161,7 +174,7 @@ pub const VGA = struct {
     // Update the position of the hardware cursor.
     // Use the software cursor as the source of truth.
     //
-    fn updateCursor(self: *const VGA) void {
+    pub fn updateCursor(self: *const VGA) void {
         arch.outb(0x3D4, 0x0F);
         arch.outb(0x3D5, @truncate(u8, self.cursor));
         arch.outb(0x3D4, 0x0E);

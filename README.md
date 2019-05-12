@@ -7,9 +7,11 @@ slowly porting from rust.
  - vga frame buffer
  - ps2 keyboard driver
  - interrupts
- - todo: terminal console
+ - terminal console
+ - lspci
  - todo: memory mapping
  - todo: cfs scheduler
+ - todo: smp
 
 ### dependencies
 

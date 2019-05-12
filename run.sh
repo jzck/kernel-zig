@@ -12,6 +12,7 @@ qemu() {
             -monitor unix:${QEMU_SOCKET},server,nowait\
             -display curses\
             -enable-kvm\
+            -device virtio-net,netdev=network0 -netdev tap,id=network0,ifname=tap0,script=no,downscript=no\
             $*
     }
 
