@@ -7,8 +7,9 @@ pub fn build(b: *Builder) void {
     kernel.addPackagePath("arch", "src/arch/x86/lib/index.zig");
     kernel.setOutputDir("build");
 
+    // kernel.addAssemblyFile("src/arch/x86/_start.s");
     kernel.addAssemblyFile("src/arch/x86/gdt.s");
-    kernel.addAssemblyFile("src/arch/x86/isr.s");
+    // kernel.addAssemblyFile("src/arch/x86/isr.s");
 
     kernel.setBuildMode(b.standardReleaseOptions());
     kernel.setTarget(builtin.Arch.i386, builtin.Os.freestanding, builtin.Abi.none);
