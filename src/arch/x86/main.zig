@@ -1,5 +1,5 @@
-use @import("kernel").main;
-use @import("kernel").multiboot;
+usingnamespace @import("kernel").main;
+usingnamespace @import("kernel").multiboot;
 const idt = @import("idt.zig");
 const gdt = @import("gdt.zig");
 const x86 = @import("lib/index.zig");

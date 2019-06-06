@@ -1,4 +1,4 @@
-use @import("multiboot.zig");
+usingnamespace @import("multiboot.zig");
 const pci = @import("pci.zig");
 const arch = @import("arch/x86/lib/index.zig");
 const console = @import("console.zig");

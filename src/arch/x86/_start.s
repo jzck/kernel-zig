@@ -1,9 +1,9 @@
-.global _start
-.type _start, @function
+.global __start
+.type __start, @function
 
 // Entry point. It puts the machine into a consistent state,
 // starts the kernel and then waits forever.
-_start:
+__start:
     mov $0x80000, %esp  // Setup the stack.
 
     push %ebx   // Pass multiboot info structure.

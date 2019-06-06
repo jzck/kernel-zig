@@ -1,5 +1,5 @@
-/* ENTRY(_start) */
-ENTRY(x86_main)
+ENTRY(__start)
+/* ENTRY(x86_main) */
 /* OUTPUT_FORMAT(elf32-i386) */
 
 SECTIONS {

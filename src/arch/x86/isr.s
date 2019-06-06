@@ -8,6 +8,7 @@ USER_DS   = 0x23
 .macro isrGenerate n
     .align 4
     .type isr\n, @function
+    .global isr\n
 
     isr\n:
         // Push a dummy error code for interrupts that don't have one.
