@@ -25,9 +25,9 @@ const IRQ_15 = IRQ_0 + 15;
 const SYSCALL = 128;
 
 // Registered interrupt handlers. (see isr.s)
-var handlers = []fn () void{unhandled} ** 48;
+var handlers = [_]fn () void{unhandled} ** 48;
 // Registered IRQ subscribers. (see isr.s)
-var irq_subscribers = []MailboxId{MailboxId.Kernel} ** 16;
+// var irq_subscribers = []MailboxId{MailboxId.Kernel} ** 16;
 
 fn unhandled() noreturn {
     const n = isr.context.interrupt_n;

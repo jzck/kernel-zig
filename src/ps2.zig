@@ -4,7 +4,7 @@ const console = @import("console.zig");
 const PS2_DATA = 0x60;
 const PS2_STATUS = 0x64;
 const KEYMAP_MAX = 59;
-const KEYMAP_US = [][2]u8{
+const KEYMAP_US = [_][2]u8{
     "\x00\x00",
     "\x00\x00", //escape
     "1!",

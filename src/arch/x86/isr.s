@@ -2,7 +2,10 @@
 KERNEL_STACK = 0x80000
 // GDT selectors.
 KERNEL_DS = 0x10
-USER_DS   = 0x23
+
+// not USER stack yet
+// USER_DS   = 0x23
+USER_DS = 0x10
 
 // Template for the Interrupt Service Routines.
 .macro isrGenerate n
@@ -41,6 +44,7 @@ isrCommon:
     mov $USER_DS, %ax
     mov %ax, %ds
     mov %ax, %es
+
 
     popa          // Restore the registers state.
     add $8, %esp  // Remove interrupt number and error code from stack.

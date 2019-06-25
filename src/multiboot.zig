@@ -10,7 +10,6 @@ pub const MULTIBOOT_BOOTLOADER_MAGIC = 0x2BADB002;
 pub const MULTIBOOT_INFO_MEMORY      = 0x00000001;
 // Is there a full memory map?
 pub const MULTIBOOT_INFO_MEM_MAP     = 0x00000040;
-
 // System information structure passed by the bootloader.
 pub const MultibootInfo = packed struct {
     // Multiboot info version number.
@@ -115,7 +114,7 @@ const MultibootHeader = packed struct {
 
 // Place the header at the very beginning of the binary.
 export const multiboot_header align(4) linksection(".multiboot") = multiboot: {
-    const MAGIC   = u32(0x1BADB002);  // Magic number for validation.
+    const MAGIC   = u32(0x1BADB002);  // multiboot magic
     const ALIGN   = u32(1 << 0);      // Align loaded modules.
     const MEMINFO = u32(1 << 1);      // Receive a memory map from the bootloader.
     const FLAGS   = ALIGN | MEMINFO;  // Combine the flags.

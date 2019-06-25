@@ -1,16 +1,16 @@
 usingnamespace @import("kernel").main;
 usingnamespace @import("kernel").multiboot;
 const idt = @import("idt.zig");
+const mem = @import("mem.zig");
 const gdt = @import("gdt.zig");
 const x86 = @import("lib/index.zig");
-const assert = @import("std").debug.assert;
+const console = @import("../console.zig");
 
 /// x86 specific intialization
 /// first entry point (see linker.ld)
-export nakedcc fn x86_main(magic: u32, info: *const MultibootInfo) noreturn {
-    // assert(magic == MULTIBOOT_BOOTLOADER_MAGIC);
-    gdt.initialize();
+pub fn x86_main(info: *const MultibootInfo) void {
+    mem.initialize(info);
+    // gdt.initialize();
     idt.initialize();
-    x86.sti();
-    kmain(magic, info);
+    // x86.sti();
 }

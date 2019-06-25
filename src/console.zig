@@ -4,7 +4,7 @@ const ps2 = @import("ps2.zig");
 const pci = @import("pci.zig");
 const std = @import("std");
 const mem = std.mem;
-use @import("vga.zig");
+usingnamespace @import("vga.zig");
 
 var command: [10]u8 = undefined;
 var command_len: usize = 0;
@@ -34,6 +34,6 @@ pub fn keypress(char: u8) void {
 
 pub fn initialize() void {
     vga.clear();
-    vga.writeString("> ");
+    // vga.writeString("> ");
     interrupt.registerIRQ(1, ps2.keyboard_handler);
 }
