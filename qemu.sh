@@ -9,6 +9,7 @@ start() {
         -gdb tcp::${QEMU_GDB_PORT} \
         -monitor unix:${QEMU_SOCKET},server,nowait \
         -enable-kvm \
+        -m 547M \
         -display curses \
         -device virtio-net,netdev=network0 -netdev tap,id=network0,ifname=tap0,script=no,downscript=no \
         -kernel ${KERNEL}

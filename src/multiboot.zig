@@ -68,19 +68,19 @@ pub const MultibootInfo = packed struct {
     ////
     // Load all the modules passed by the bootloader.
     //
-    pub fn loadModules(self: *const MultibootInfo) void {
-        const mods = @intToPtr([*]MultibootModule, self.mods_addr)[0..self.mods_count];
+    // pub fn loadModules(self: *const MultibootInfo) void {
+    //     const mods = @intToPtr([*]MultibootModule, self.mods_addr)[0..self.mods_count];
 
-        for (mods) |mod| {
-            const cmdline = cstr.toSlice(@intToPtr([*]u8, mod.cmdline));
-            tty.step("Loading \"{}\"", cmdline);
+    //     for (mods) |mod| {
+    //         const cmdline = cstr.toSlice(@intToPtr([*]u8, mod.cmdline));
+    //         tty.step("Loading \"{}\"", cmdline);
 
-            _ = Process.create(mod.mod_start, null);
-            // TODO: deallocate the original memory.
+    //         _ = Process.create(mod.mod_start, null);
+    //         // TODO: deallocate the original memory.
 
-            tty.stepOK();
-        }
-    }
+    //         tty.stepOK();
+    //     }
+    // }
 };
 
 // Types of memory map entries.
