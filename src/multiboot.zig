@@ -1,3 +1,6 @@
+// MULTIBOOT1
+// https://www.gnu.org/software/grub/manual/multiboot/multiboot.html
+
 // zig fmt: off
 const tty = @import("tty.zig");
 const cstr = @import("std").cstr;
@@ -117,7 +120,8 @@ export const multiboot_header align(4) linksection(".multiboot") = multiboot: {
     const MAGIC   = u32(0x1BADB002);  // multiboot magic
     const ALIGN   = u32(1 << 0);      // Align loaded modules.
     const MEMINFO = u32(1 << 1);      // Receive a memory map from the bootloader.
-    const FLAGS   = ALIGN | MEMINFO;  // Combine the flags.
+    const CMDLINE = u32(1 << 2);      // Receive a cmdline from the bootloader
+    const FLAGS   = ALIGN | MEMINFO | CMDLINE;  // Combine the flags.
 
     break :multiboot MultibootHeader {
         .magic    = MAGIC,

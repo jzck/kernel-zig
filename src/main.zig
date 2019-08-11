@@ -1,8 +1,8 @@
 usingnamespace @import("multiboot.zig");
+usingnamespace @import("vga.zig");
 const pci = @import("pci.zig");
 const arch = @import("arch/x86/lib/index.zig");
 const console = @import("console.zig");
-const vga = @import("vga.zig");
 const x86 = @import("arch/x86/main.zig");
 const assert = @import("std").debug.assert;
 
@@ -11,11 +11,23 @@ export fn kmain(magic: u32, info: *const MultibootInfo) noreturn {
     assert(magic == MULTIBOOT_BOOTLOADER_MAGIC);
     console.initialize();
 
-    vga.printf("--- x86_main ---\n");
+    printf("--- hello x86_main ---\n");
 
     x86.x86_main(info);
 
-    vga.printf("--- arch indepent boot ---\n");
+    // pagefault_test(0xfeffc000);
+
+    printf("\n--- arch indepent boot ---\n");
 
     while (true) {}
+}
+
+fn pagefault_test(addr: u32) void {
+    const ptr = @intToPtr(*volatile u8, addr);
+    var a: u8 = ptr.*;
+    printf("a = {}\n", a);
+
+    ptr.* += 1;
+
+    printf("a = {}\n", ptr.*);
 }

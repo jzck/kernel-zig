@@ -9,20 +9,21 @@ slowly porting from rust.
  - interrupts
  - terminal console
  - lspci
- - todo: memory mapping
- - todo: cfs scheduler
- - todo: smp
 
 ### dependencies
 
-`ziglang` compiler
+`zig` compiler
 
 ### compile
 
-`zig build` compile and links a multiboot kernel, without a bootloader.
+`zig build` compiles and links the multiboot kernel, without a bootloader.
 
 ### test
 
-`./run.sh qemu start`
-`./run.sh qemu monitor`
-`./run.sh gdb`
+`./qemu.sh start`  
+`./qemu.sh monitor`  
+`./qemu.sh gdb`  
+
+### todo
+
+- recycling allocator that wraps the bump allocator
