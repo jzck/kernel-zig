@@ -59,6 +59,9 @@ const Errors = error{};
 pub fn printf(comptime format: []const u8, args: ...) void {
     var a = std.fmt.format({}, Errors, printCallback, format, args);
 }
+pub fn println(comptime format: []const u8, args: ...) void {
+    var a = std.fmt.format({}, Errors, printCallback, format ++ "\n", args);
+}
 
 fn printCallback(context: void, string: []const u8) Errors!void {
     vga.writeString(string);

@@ -1,30 +1,27 @@
 QEMU_SOCKET=/tmp/qemu.sock
 QEMU_MONITOR="socat - UNIX-CONNECT:${QEMU_SOCKET}"
 QEMU_GDB_PORT=4242
-KERNEL=build/bzImage
+KERNEL=build/kernel
 
 start() {
-    sudo pkill -9 qemu
     sudo qemu-system-i386 \
         -gdb tcp::${QEMU_GDB_PORT} \
         -monitor unix:${QEMU_SOCKET},server,nowait \
         -enable-kvm \
-        -m 1337M \
-        -display curses \
+        -m 50M \
         -serial mon:stdio \
-        -append "Hello" \
-        -device virtio-net,netdev=network0 -netdev tap,id=network0,ifname=tap0,script=no,downscript=no \
+        -curses \
         -kernel ${KERNEL}
-	# build/kernel.iso
+        # -cdrom ${KERNEL}.iso
+        # -append "Hello" \
+        # -S
+        # -device virtio-net,netdev=network0 -netdev tap,id=network0,ifname=tap0,script=no,downscript=no \
+        # build/kernel.iso
         "$@"
 }
 
 monitor() {
-    if [ "$1" == "" ]; then
-        sudo ${QEMU_MONITOR}
-    else
-        echo "$1" | sudo ${QEMU_MONITOR} >/dev/null
-    fi
+    [ "$1" == "" ] && sudo ${QEMU_MONITOR} || echo "$1" | sudo ${QEMU_MONITOR} >/dev/null
 }
 
 reload() {

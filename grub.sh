@@ -5,6 +5,16 @@ exit_missing() {
 
 which xorriso || exit_missing
 which grub-mkrescue || exit_missing
-mkdir -p build/iso/boot
-cp build/bzImage build/iso/boot
+mkdir -p build/iso/boot/grub
+cp build/kernel build/iso/boot
+>build/iso/boot/grub/grub.cfg <<EOF
+set timeout=0
+set default=0
+
+menuentry "OS" {
+    multiboot2 /boot/kernel
+    boot
+}
+EOF
+
 grub-mkrescue -o build/kernel.iso build/iso

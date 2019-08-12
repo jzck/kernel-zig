@@ -9,7 +9,7 @@ const printf = @import("../../vga.zig").printf;
 
 /// x86 specific intialization
 /// first entry point (see linker.ld)
-pub fn x86_main(info: *const MultibootInfo) void {
+pub fn x86_main(info: *const multibootInfo) void {
     var allocator = mem.initialize(info);
 
     // gdt.initialize();
