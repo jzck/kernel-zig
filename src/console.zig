@@ -22,6 +22,13 @@ pub fn keypress(char: u8) void {
             vga.writeString("> ");
             command_len = 0;
         },
+        '\x08' => {
+            //backspace
+            return;
+        },
+        '\x00' => {
+            return;
+        },
         else => {
             if (command_len == 10)
                 return;

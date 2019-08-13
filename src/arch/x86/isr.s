@@ -1,5 +1,5 @@
 // Kernel stack for interrupt handling.
-KERNEL_STACK = 0x80000
+KERNEL_STACK = 0x800000
 // GDT selectors.
 KERNEL_DS = 0x10
 

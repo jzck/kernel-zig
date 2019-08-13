@@ -48,9 +48,6 @@ pub fn setGate(n: u8, flags: u8, offset: extern fn () void) void {
     idt[n].flags = flags;
     idt[n].zero = 0;
     idt[n].selector = gdt.KERNEL_CODE;
-    println("offset: 0x{x}", @ptrToInt(offset));
-    println("low   : 0x{x}", idt[n].offset_low);
-    println("high  : 0x{x}", idt[n].offset_high);
 }
 
 ////

@@ -20,7 +20,7 @@ const KEYMAP_US = [_][2]u8{
     "0)",
     "-_",
     "=+",
-    "\x00\x00", //backspace
+    "\x08\x08", //backspace
     "\x00\x00", //tab
     "qQ",
     "wW",
@@ -85,7 +85,6 @@ fn key_isrelease(scancode: u8) bool {
 pub fn keyboard_handler() void {
     const scancode = ps2_scancode();
     const isrelease = key_isrelease(scancode);
-    println("keyboard scancode 0b{b}", scancode);
     if (isrelease) {
         return;
     }
