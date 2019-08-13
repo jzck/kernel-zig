@@ -135,24 +135,24 @@ pub fn install() void {
     idt.setGate(30, idt.INTERRUPT_GATE, isr30);
     idt.setGate(31, idt.INTERRUPT_GATE, isr31);
 
-    // // IRQs.
+    // IRQs.
     idt.setGate(32, idt.INTERRUPT_GATE, isr32);
     idt.setGate(33, idt.INTERRUPT_GATE, isr33);
-    // idt.setGate(34, idt.INTERRUPT_GATE, isr34);
-    // idt.setGate(35, idt.INTERRUPT_GATE, isr35);
-    // idt.setGate(36, idt.INTERRUPT_GATE, isr36);
-    // idt.setGate(37, idt.INTERRUPT_GATE, isr37);
-    // idt.setGate(38, idt.INTERRUPT_GATE, isr38);
-    // idt.setGate(39, idt.INTERRUPT_GATE, isr39);
-    // idt.setGate(40, idt.INTERRUPT_GATE, isr40);
-    // idt.setGate(41, idt.INTERRUPT_GATE, isr41);
-    // idt.setGate(42, idt.INTERRUPT_GATE, isr42);
-    // idt.setGate(43, idt.INTERRUPT_GATE, isr43);
-    // idt.setGate(44, idt.INTERRUPT_GATE, isr44);
-    // idt.setGate(45, idt.INTERRUPT_GATE, isr45);
-    // idt.setGate(46, idt.INTERRUPT_GATE, isr46);
-    // idt.setGate(47, idt.INTERRUPT_GATE, isr47);
+    idt.setGate(34, idt.INTERRUPT_GATE, isr34);
+    idt.setGate(35, idt.INTERRUPT_GATE, isr35);
+    idt.setGate(36, idt.INTERRUPT_GATE, isr36);
+    idt.setGate(37, idt.INTERRUPT_GATE, isr37);
+    idt.setGate(38, idt.INTERRUPT_GATE, isr38);
+    idt.setGate(39, idt.INTERRUPT_GATE, isr39);
+    idt.setGate(40, idt.INTERRUPT_GATE, isr40);
+    idt.setGate(41, idt.INTERRUPT_GATE, isr41);
+    idt.setGate(42, idt.INTERRUPT_GATE, isr42);
+    idt.setGate(43, idt.INTERRUPT_GATE, isr43);
+    idt.setGate(44, idt.INTERRUPT_GATE, isr44);
+    idt.setGate(45, idt.INTERRUPT_GATE, isr45);
+    idt.setGate(46, idt.INTERRUPT_GATE, isr46);
+    idt.setGate(47, idt.INTERRUPT_GATE, isr47);
 
-    // // Syscalls.
-    // idt.setGate(128, idt.SYSCALL_GATE, isr128);
+    // Syscalls.
+    idt.setGate(128, idt.SYSCALL_GATE, isr128);
 }

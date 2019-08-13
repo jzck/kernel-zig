@@ -24,6 +24,9 @@ pub inline fn hang() noreturn {
 pub inline fn sti() void {
     asm volatile ("sti");
 }
+pub inline fn int3() void {
+    asm volatile ("int3");
+}
 
 ////
 // Load a new Interrupt Descriptor Table.

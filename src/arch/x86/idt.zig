@@ -1,4 +1,5 @@
 // https://wiki.osdev.org/IDT
+usingnamespace @import("../../vga.zig");
 const x86 = @import("lib/index.zig");
 const interrupt = @import("interrupt.zig");
 const gdt = @import("gdt.zig");
@@ -47,12 +48,18 @@ pub fn setGate(n: u8, flags: u8, offset: extern fn () void) void {
     idt[n].flags = flags;
     idt[n].zero = 0;
     idt[n].selector = gdt.KERNEL_CODE;
+    println("offset: 0x{x}", @ptrToInt(offset));
+    println("low   : 0x{x}", idt[n].offset_low);
+    println("high  : 0x{x}", idt[n].offset_high);
 }
 
 ////
 // Initialize the Interrupt Descriptor Table.
 //
 pub fn initialize() void {
+    // configure PIC and set ISRs
     interrupt.initialize();
+
+    // load IDT
     x86.lidt(@ptrToInt(&idtr));
 }

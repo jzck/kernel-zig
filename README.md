@@ -24,6 +24,8 @@ slowly porting from rust.
 `./qemu.sh monitor`  
 `./qemu.sh gdb`  
 
-### todo
+# Notes
 
-- recycling allocator that wraps the bump allocator
+## interrupts
+
+`interrupt` -> `idt[n]` -> `isrN` -> `isrDispatch` -> `handlers[n]` (default `unhandled()`)

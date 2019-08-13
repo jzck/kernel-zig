@@ -2,7 +2,7 @@ const arch = @import("arch/x86/lib/index.zig");
 
 const PCI_CONFIG_ADDRESS = 0xCF8;
 const PCI_CONFIG_DATA = 0xCFC;
-const vga = @import("vga.zig");
+usingnamespace @import("vga.zig");
 
 pub const PciAddress = packed struct {
     offset: u8,
@@ -57,7 +57,7 @@ pub const PciDevice = struct {
     }
 
     pub fn format(self: PciDevice) void {
-        vga.printf("{}:{}.{} {x},{x}: {x} {x}\n", self.bus, self.slot, self.function, self.class, self.subclass, self.vendor, self.device);
+        println("{}:{}.{} {x},{x}: {x} {x}", self.bus, self.slot, self.function, self.class, self.subclass, self.vendor, self.device);
     }
 
     pub fn access(self: PciDevice, offset: u8) void {

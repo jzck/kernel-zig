@@ -1,5 +1,6 @@
 const x86 = @import("lib/index.zig");
 const isr = @import("isr.zig");
+const println = @import("../../vga.zig").println;
 
 // PIC ports.
 const PIC1_CMD = 0x20;
@@ -31,11 +32,11 @@ var handlers = [_]fn () void{unhandled} ** 48;
 
 fn unhandled() noreturn {
     const n = isr.context.interrupt_n;
-    // if (n >= IRQ_0) {
-    //     tty.panic("unhandled IRQ number {d}", n - IRQ_0);
-    // } else {
-    //     tty.panic("unhandled exception number {d}", n);
-    // }
+    if (n < IRQ_0) {
+        println("unhandled exception number {d}", n);
+    } else {
+        println("unhandled IRQ number {d} (intr {d})", n - IRQ_0, n);
+    }
     x86.hang();
 }
 
@@ -177,6 +178,7 @@ pub fn maskIRQ(irq: u8, mask: bool) void {
     } else {
         x86.outb(port, old & ~(u8(1) << shift));
     }
+    const new = x86.inb(port); // Retrieve the current mask.
 }
 
 ////

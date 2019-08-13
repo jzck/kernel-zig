@@ -9,17 +9,18 @@ const assert = @import("std").debug.assert;
 // arch independant initialization
 export fn kmain(magic: u32, info: *const MultibootInfo) noreturn {
     assert(magic == MULTIBOOT_BOOTLOADER_MAGIC);
-    console.initialize();
 
-    printf("--- hello x86_main ---\n");
-
+    println("--- x86 initialization ---");
     x86.x86_main(info);
 
     // pagefault_test(0xfeffc000);
 
-    printf("\n--- arch indepent boot ---\n");
+    println("--- core initialization ---");
+    console.initialize();
 
-    while (true) {}
+    while (true) {
+        asm volatile ("hlt");
+    }
 }
 
 fn pagefault_test(addr: u32) void {

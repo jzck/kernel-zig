@@ -72,7 +72,7 @@ fn makeEntry(base: usize, limit: usize, access: u8, flags: u4) GDTEntry {
 }
 
 // Fill in the GDT.
-var gdt align(4) = []GDTEntry{
+var gdt align(4) = [_]GDTEntry{
     makeEntry(0, 0, 0, 0),
     makeEntry(0, 0xFFFFF, KERNEL | CODE, PROTECTED | BLOCKS_4K),
     makeEntry(0, 0xFFFFF, KERNEL | DATA, PROTECTED | BLOCKS_4K),
@@ -92,7 +92,7 @@ var tss = TSS{
     .unused1 = 0,
     .esp0 = undefined,
     .ss0 = KERNEL_DATA,
-    .unused2 = []u32{0} ** 22,
+    .unused2 = [_]u32{0} ** 22,
     .unused3 = 0,
     .iomap_base = @sizeOf(TSS),
 };

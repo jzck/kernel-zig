@@ -1,3 +1,4 @@
+usingnamespace @import("vga.zig");
 const x86 = @import("arch/x86/lib/index.zig");
 const console = @import("console.zig");
 
@@ -84,6 +85,7 @@ fn key_isrelease(scancode: u8) bool {
 pub fn keyboard_handler() void {
     const scancode = ps2_scancode();
     const isrelease = key_isrelease(scancode);
+    println("keyboard scancode 0b{b}", scancode);
     if (isrelease) {
         return;
     }

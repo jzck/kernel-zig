@@ -8,7 +8,8 @@ SECTIONS {
 	. = 0xb8000;
 	. += 80 * 25 * 2;
 
-	. = 0x100000;
+    /* lower half kernel */
+	. = 0x10000;
 
 	/* ensure that the multiboot header is at the beginning */
 	.multiboot :
@@ -67,16 +68,4 @@ SECTIONS {
 		*(.bss .bss.*)
 		. = ALIGN(4K);
 	}
-
-	/* .stab : */
-	/* { */
-	/* 	KEEP(*(.stab)) */
-	/* 	. = ALIGN(4K); */
-	/* } */
-
-	/* .stabstr : */
-	/* { */
-	/* 	KEEP(*(.stabstr)) */
-	/* 	. = ALIGN(4K); */
-	/* } */
 }
