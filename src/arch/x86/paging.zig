@@ -1,89 +1,102 @@
 const x86 = @import("lib/index.zig");
-const allocator = @import("memory.zig").allocator;
+const memory = @import("memory.zig");
+const interrupt = @import("interrupt.zig");
 const assert = @import("std").debug.assert;
 const println = @import("../../vga.zig").println;
 
 extern fn setupPaging(phys_pd: usize) void;
 
-pub var mapper: Mapper = undefined;
+const PageEntry = usize;
 pub const PAGE_SIZE = 4096;
+pub const PT = @intToPtr([*]PageEntry, 0xFFC00000);
+pub const PD = @intToPtr([*]PageEntry, 0xFFFFF000);
+const PRESENT = 0x1;
+const WRITE = 0x2;
+const USER = 0x4;
+const WRITE_THRU = 0x8;
+const NOCACHE = 0x10;
+const ACCESSED = 0x20;
+const HUGE = 0x80;
 
-pub fn initialize() void {
-    const empty_page = PageDirectoryEntry{};
-    // var p2 = allocator.allocate(1);
-    var p2 = [_]PageDirectoryEntry{empty_page} ** 1024;
-    // var p2 = [_]u32{0} ** 1024;
+pub var pageDirectory: [1024]PageEntry align(4096) linksection(".bss") = [_]PageEntry{0} ** 1024;
 
-    // identity map 0 -> 4MB
-    p2[0].pageTable = 0x0;
-    p2[0].present = true;
-    p2[0].read_write = true;
-    p2[0].huge = true;
-    // p2[0] = @bitReverse(u32, 0b10000011);
-
-    println("p2[0] {b}", p2[0]);
-    println("p2[0] {b}", @bitCast(u32, p2[0]));
-    // x86.hang();
-    // paging.s
-    // setupPaging(@ptrToInt(&p2));
-
-    // mapper = Mapper{
-    //     .p2 = p2,
-    // };
-    const addr = mapper.translate(0xfffff000);
+fn pageFault() void {
+    println("pagefault");
+    while (true) {
+        asm volatile ("hlt");
+    }
 }
 
-const builtin = @import("builtin");
-const Mapper = struct {
-    p2: PageDirectory,
+fn pageBase(addr: usize) usize {
+    return addr & (~PAGE_SIZE +% 1);
+}
+fn pde(addr: usize) *PageEntry {
+    return &PD[addr >> 22];
+}
+fn pte(addr: usize) *PageEntry {
+    return &PT[addr >> 12];
+}
 
-    // virt to phys
-    pub fn translate(self: Mapper, virt: u32) ?u32 {
-        const map = @bitCast(VirtAddr, virt);
-        println("{}", builtin.endian);
-        println("virt {x} -> {}-{}-{x}", virt, map.page_directory, map.page_table, map.offset);
-        return null;
+// virtual to physical
+pub fn translate(virt: usize) ?usize {
+    if (pde(virt).* == 0) return null;
+    return pageBase(pte(virt).*);
+}
+
+pub fn unmap(virt: usize) void {
+    var pte = pte(virt);
+    if (pte.* == 0) {
+        println("can't unmap 0x{x}, map is empty.", addr);
+        return;
     }
-};
+    pte.* = 0;
+    memory.free(translate(virt));
+}
 
-pub const VirtAddr = packed struct {
-    page_directory: u10,
-    page_table: u10,
-    offset: u12,
-};
+pub fn mmap(virt: usize, phys: ?usize) void {
+    var pde: *PageEntry = &PD[virt >> 22];
+    if (pde.* == 0) {
+        pde.* = memory.allocate() | WRITE | PRESENT;
+    }
+    var pte: *PageEntry = &PT[virt >> 12];
+    pte.* = if (phys) |p| p else allocate() | PRESENT;
+}
 
-pub const PageDirectoryEntry = packed struct {
-    pageTable: u20 = 0,
-    available: u3 = 0,
-    ignored: bool = false,
-    huge: bool = false,
-    zero: bool = false,
-    accessed: bool = false,
-    cache_disabled: bool = false,
-    write_thru: bool = false,
-    supervisor: bool = false,
-    read_write: bool = false,
-    present: bool = false,
-};
+pub fn addrspace() void {
+    var i: usize = 1;
+    i = 0;
+    while (i < 1024) : (i += 1) {
+        if (PD[i] == 0) {
+            continue;
+        }
+        println("p2[{}] -> 0x{x}", i, PD[i]);
+        if (PD[i] & HUGE != 0) {
+            continue;
+        }
+        var j: usize = 0;
+        while (j < 1024) : (j += 1) {
+            var entry: PageEntry = PT[i * 1024 + j];
+            if (entry != 0) {
+                println("p2[{}]p1[{}] -> 0x{x}", i, j, entry);
+            }
+        }
+    }
+}
 
-pub const PageTableEntry = packed struct {
-    addr: u20 = 0,
-    available: u3 = 0,
-    global: bool = false,
-    zero: bool = false,
-    dirty: bool = false,
-    accessed: bool = false,
-    cache_disabled: bool = false,
-    write_thru: bool = false,
-    supervisor: bool = false,
-    read_write: bool = false,
-    present: bool = false,
-};
+pub fn initialize() void {
+    var p2 = pageDirectory[0..];
+    // identity map 0 -> 4MB
 
-pub const PageTable = [1024]PageTableEntry;
-pub const PageDirectory = [1024]PageDirectoryEntry;
+    p2[0] = 0x000000 | PRESENT | WRITE | HUGE;
+    p2[1023] = @ptrToInt(&p2[0]) | PRESENT | WRITE;
 
-comptime {
-    assert(@sizeOf(PageDirectoryEntry) == 4); //32 bits
-    assert(@sizeOf(PageTableEntry) == 4); //32 bits
+    assert(memory.stack_end < 0x400000);
+    // const first: *u32 = @ptrCast(*u32, p2);
+    // println("p2[0] {b}", first.*);
+
+    interrupt.register(14, pageFault);
+    setupPaging(@ptrToInt(&pageDirectory[0]));
+
+    addrspace();
+    // const addr = mapper.translate(0xfffff000);
 }

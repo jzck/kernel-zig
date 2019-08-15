@@ -17,31 +17,28 @@ pub const PciDevice = struct {
     bus: u8,
     slot: u5,
     function: u3,
-    device: u16,
-    vendor: u16,
-    class: u8,
-    subclass: u8,
-    header_type: u8,
+    device: u16 = undefined,
+    vendor: u16 = undefined,
+    class: u8 = undefined,
+    subclass: u8 = undefined,
+    header_type: u8 = undefined,
+    driver: ?Driver = null,
 
     pub fn init(bus: u8, slot: u5, function: u3) ?PciDevice {
-        var pcidevice = PciDevice{
+        var dev = PciDevice{
             .bus = bus,
             .slot = slot,
             .function = function,
-            .device = undefined,
-            .class = undefined,
-            .subclass = undefined,
-            .header_type = undefined,
-            .vendor = undefined,
         };
-        pcidevice.vendor = pci_config_read_word(pcidevice, 0);
-        if (pcidevice.vendor == 0xffff)
+        dev.vendor = dev.pci_config_read_word(0);
+        if (dev.vendor == 0xffff)
             return null;
-        pcidevice.device = pci_config_read_word(pcidevice, 2);
-        pcidevice.subclass = pci_config_read_byte(pcidevice, 10);
-        pcidevice.class = pci_config_read_byte(pcidevice, 11);
-        pcidevice.header_type = pci_config_read_byte(pcidevice, 14);
-        return (pcidevice);
+        dev.device = dev.pci_config_read_word(2);
+        dev.subclass = dev.pci_config_read_byte(10);
+        dev.class = dev.pci_config_read_byte(11);
+        dev.header_type = dev.pci_config_read_byte(14);
+        dev.driver = dev.get_driver();
+        return (dev);
     }
 
     pub fn address(self: PciDevice, offset: u8) u32 {
@@ -57,7 +54,11 @@ pub const PciDevice = struct {
     }
 
     pub fn format(self: PciDevice) void {
-        println("{}:{}.{} {x},{x}: {x} {x}", self.bus, self.slot, self.function, self.class, self.subclass, self.vendor, self.device);
+        print("{}:{}.{}", self.bus, self.slot, self.function);
+        print(" {x},{x}: {x} {x}", self.class, self.subclass, self.vendor, self.device);
+        if (self.driver) |d|
+            print(" {}", d.name);
+        println("");
     }
 
     pub fn access(self: PciDevice, offset: u8) void {
@@ -78,13 +79,33 @@ pub const PciDevice = struct {
         self.access(offset);
         return (arch.inl(PCI_CONFIG_DATA));
     }
+
+    pub fn get_driver(self: PciDevice) ?Driver {
+        var i: usize = 0;
+        while (i < Drivers.len) : (i += 1) {
+            var driver = Drivers[i];
+            if (self.class == driver.class and self.subclass == driver.subclass and (driver.vendor == null or self.vendor == driver.vendor.?)) {
+                return driver;
+            }
+        }
+        return null;
+    }
 };
+
+const Driver = struct {
+    name: [*]u8,
+    class: u8,
+    subclass: u8,
+    vendor: ?u16 = null,
+};
+
+const name = "virtio-blk";
+pub var Drivers: [1]Driver = [_]Driver{Driver{ .name = &name, .class = 0x1, .subclass = 0x0, .vendor = 0x1af4 }};
 
 pub fn lspci() void {
     var slot: u5 = 0;
     while (true) {
         if (PciDevice.init(0, slot, 0)) |device| {
-            device.format();
             var function: u3 = 0;
             while (true) {
                 if (PciDevice.init(0, slot, function)) |vf|

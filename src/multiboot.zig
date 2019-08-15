@@ -81,8 +81,12 @@ pub const MultibootInfo = packed struct {
     // Return the ending address of the last module.
     //
     pub fn lastModuleEnd(self: *const MultibootInfo) usize {
-        const mods = @intToPtr([*]MultibootModule, self.mods_addr);
-        return mods[self.mods_count - 1].mod_end;
+        if (self.mods_count > 0) {
+            const mods = @intToPtr([*]MultibootModule, self.mods_addr);
+            return mods[self.mods_count - 1].mod_end;
+        } else {
+            return self.mods_addr;
+        }
     }
 
     ////

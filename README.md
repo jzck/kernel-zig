@@ -29,3 +29,8 @@ slowly porting from rust.
 ## interrupts
 
 `interrupt` -> `idt[n]` -> `isrN` -> `isrDispatch` -> `handlers[n]` (default `unhandled()`)
+
+## layout
+
+`0->4Mib` kernel reserved
+`1Mib` interrupt stack

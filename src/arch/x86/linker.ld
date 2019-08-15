@@ -8,7 +8,7 @@ SECTIONS {
 	. = 0xb8000;
 	. += 80 * 25 * 2;
 
-    /* lower half kernel */
+    /* lower half kernel <1MiB */
 	. = 0x10000;
 
 	/* ensure that the multiboot header is at the beginning */
@@ -37,29 +37,9 @@ SECTIONS {
 		. = ALIGN(4K);
 	}
 
-	/* NOT A GOOD IDEA TO GROUP debug_* SYMBOLS ! */
-	/* .debug : */
-	/* { */
-	/* 	/1* KEEP(*(.debug_*)) *1/ */
-	/* 	*(.debug_*) */
-	/* 	. = ALIGN(4K); */
-	/* } */
-
 	.gdt :
 	{
 		*(.gdt)
-		. = ALIGN(4K);
-	}
-
-	.got :
-	{
-		*(.got)
-		. = ALIGN(4K);
-	}
-
-	.got.plt :
-	{
-		*(.got.plt)
 		. = ALIGN(4K);
 	}
 

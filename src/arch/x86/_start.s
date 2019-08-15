@@ -8,6 +8,7 @@ __start:
 
     push %ebx   // Pass multiboot info structure.
     push %eax   // Pass multiboot magic code.
+
     call kmain  // Call the kernel.
 
     // Halt the CPU.

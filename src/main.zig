@@ -8,9 +8,11 @@ const assert = @import("std").debug.assert;
 
 // arch independant initialization
 export fn kmain(magic: u32, info: *const MultibootInfo) noreturn {
+    clear();
     assert(magic == MULTIBOOT_BOOTLOADER_MAGIC);
 
     println("--- x86 initialization ---");
+
     x86.x86_main(info);
 
     // pagefault_test(0xfeffc000);

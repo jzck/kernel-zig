@@ -125,9 +125,9 @@ pub fn initialize() void {
     loadGDT(&gdtr);
 
     // Initialize TSS.
-    const tss_entry = makeEntry(@ptrToInt(&tss), @sizeOf(TSS) - 1, TSS_ACCESS, PROTECTED);
-    gdt[TSS_DESC / @sizeOf(GDTEntry)] = tss_entry;
-    x86.ltr(TSS_DESC);
+    // const tss_entry = makeEntry(@ptrToInt(&tss), @sizeOf(TSS) - 1, TSS_ACCESS, PROTECTED);
+    // gdt[TSS_DESC / @sizeOf(GDTEntry)] = tss_entry;
+    // x86.ltr(TSS_DESC);
 
     // tty.stepOK();
 }

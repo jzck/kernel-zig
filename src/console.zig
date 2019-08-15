@@ -40,7 +40,6 @@ pub fn keypress(char: u8) void {
 }
 
 pub fn initialize() void {
-    // vga.clear();
     interrupt.registerIRQ(1, ps2.keyboard_handler);
     vga.writeString("> ");
 }

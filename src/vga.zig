@@ -63,6 +63,9 @@ pub fn print(comptime format: []const u8, args: ...) void {
 pub fn println(comptime format: []const u8, args: ...) void {
     var a = std.fmt.format({}, Errors, printCallback, format ++ "\n", args);
 }
+pub fn clear() void {
+    vga.clear();
+}
 
 fn printCallback(context: void, string: []const u8) Errors!void {
     vga.writeString(string);
