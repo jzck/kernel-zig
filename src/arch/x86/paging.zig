@@ -96,7 +96,5 @@ pub fn initialize() void {
 
     interrupt.register(14, pageFault);
     setupPaging(@ptrToInt(&pageDirectory[0]));
-
-    addrspace();
     // const addr = mapper.translate(0xfffff000);
 }

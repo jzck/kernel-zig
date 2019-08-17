@@ -1,2 +1,2 @@
-use @import("io.zig");
-use @import("instructions.zig");
+usingnamespace @import("io.zig");
+usingnamespace @import("instructions.zig");

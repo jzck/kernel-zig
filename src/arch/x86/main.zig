@@ -10,7 +10,6 @@ const gdt = @import("gdt.zig");
 const x86 = @import("lib/index.zig");
 
 /// x86 specific intialization
-/// first entry point (see linker.ld)
 pub fn x86_main(info: *const MultibootInfo) void {
     gdt.initialize();
     idt.initialize();

@@ -10,27 +10,14 @@ const assert = @import("std").debug.assert;
 export fn kmain(magic: u32, info: *const MultibootInfo) noreturn {
     clear();
     assert(magic == MULTIBOOT_BOOTLOADER_MAGIC);
-
     println("--- x86 initialization ---");
 
     x86.x86_main(info);
 
-    // pagefault_test(0xfeffc000);
-
     println("--- core initialization ---");
+    pci.scan();
     console.initialize();
-
     while (true) {
         asm volatile ("hlt");
     }
-}
-
-fn pagefault_test(addr: u32) void {
-    const ptr = @intToPtr(*volatile u8, addr);
-    var a: u8 = ptr.*;
-    printf("a = {}\n", a);
-
-    ptr.* += 1;
-
-    printf("a = {}\n", ptr.*);
 }
