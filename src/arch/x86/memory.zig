@@ -32,7 +32,6 @@ pub fn allocate() ?usize {
         println("out of memory");
         return null;
     }
-
     stack_index -= 1;
     return stack[stack_index];
 }

@@ -4,7 +4,9 @@ const PCI_CONFIG_ADDRESS = 0xCF8;
 const PCI_CONFIG_DATA = 0xCFC;
 usingnamespace @import("vga.zig");
 const virtio = @import("virtio.zig");
+const std = @import("std");
 
+// https://wiki.osdev.org/Pci
 pub const PciAddress = packed struct {
     offset: u8,
     function: u3,
@@ -21,12 +23,8 @@ pub const PciDevice = struct {
     vendor: u16 = undefined,
 
     pub fn init(bus: u8, slot: u5, function: u3) ?PciDevice {
-        var dev = PciDevice{
-            .bus = bus,
-            .slot = slot,
-            .function = function,
-        };
-        dev.vendor = dev.config_read_word(0);
+        var dev = PciDevice{ .bus = bus, .slot = slot, .function = function };
+        dev.vendor = dev.config_read(u16, 0);
         if (dev.vendor == 0xffff) return null;
         return dev;
     }
@@ -45,7 +43,8 @@ pub const PciDevice = struct {
 
     pub fn format(self: PciDevice) void {
         print("{}:{}.{}", self.bus, self.slot, self.function);
-        print(" {x},{x:2}(0x{x:4}): 0x{x} 0x{x}", self.class(), self.subclass(), self.subsystem(), self.vendor, self.device());
+        print(" {x},{x:2}", self.class(), self.subclass());
+        print(" 0x{x},0x{x}", self.vendor, self.device());
         if (self.driver()) |d|
             print(" {}", d.name);
         println("");
@@ -57,48 +56,44 @@ pub const PciDevice = struct {
             var drv = Drivers[i];
             if (self.class() != drv.class or self.subclass() != drv.subclass)
                 continue;
-            if (drv.vendor) |v| if (self.vendor == v)
+            if (drv.vendor) |v| if (self.vendor != v)
                 continue;
-            if (drv.subsystem) |ss| if (self.subsystem() == drv.subsystem.?)
+            if (drv.subsystem) |ss| if (self.subsystem() != ss)
                 continue;
             return drv;
         }
         return null;
     }
 
+    // all pci device must implement these
     pub fn device(self: PciDevice) u16 {
-        return self.config_read_word(2);
+        return self.config_read(u16, 0x2);
     }
-    pub fn subclass(self: PciDevice) u16 {
-        return self.config_read_byte(10);
+    pub fn subclass(self: PciDevice) u8 {
+        return self.config_read(u8, 0xa);
     }
-    pub fn class(self: PciDevice) u16 {
-        return self.config_read_byte(11);
+    pub fn class(self: PciDevice) u8 {
+        return self.config_read(u8, 0xb);
     }
-    pub fn header_type(self: PciDevice) u16 {
-        return self.config_read_byte(14);
+    pub fn header_type(self: PciDevice) u8 {
+        return self.config_read(u8, 0xe);
     }
+
+    // only for header_type == 0
     pub fn subsystem(self: PciDevice) u16 {
-        return self.config_read_word(0x2e);
+        return self.config_read(u8, 0x2e);
     }
 
-    pub fn access(self: PciDevice, offset: u8) void {
+    pub inline fn config_read(self: PciDevice, comptime size: type, comptime offset: u8) size {
+        // ask for access before reading config
         arch.outl(PCI_CONFIG_ADDRESS, self.address(offset));
-    }
-
-    pub fn config_read_byte(self: PciDevice, offset: u8) u8 {
-        self.access(offset);
-        return (arch.inb(PCI_CONFIG_DATA));
-    }
-
-    pub fn config_read_word(self: PciDevice, offset: u8) u16 {
-        self.access(offset);
-        return (arch.inw(PCI_CONFIG_DATA));
-    }
-
-    pub fn config_read_long(self: PciDevice, offset: u8) u32 {
-        self.access(offset);
-        return (arch.inl(PCI_CONFIG_DATA));
+        switch (size) {
+            // read the correct size
+            u8 => return arch.inb(PCI_CONFIG_DATA),
+            u16 => return arch.inw(PCI_CONFIG_DATA),
+            u32 => return arch.inl(PCI_CONFIG_DATA),
+            else => @compileError("pci config space only supports reading u8, u16, u32."),
+        }
     }
 };
 
@@ -114,12 +109,15 @@ const Driver = struct {
 const name = "virtio-blk";
 pub var Drivers: [1]Driver = [_]Driver{Driver{ .name = &name, .class = 0x1, .subclass = 0x0, .vendor = 0x1af4, .subsystem = 0x2, .init = virtio.init }};
 
+// TODO: factor 2 functions when anonymous fn is released
 pub fn scan() void {
     var slot: u5 = 0;
-    while (slot < 31) : (slot += 1) {
-        if (PciDevice.init(0, slot, 0)) |device| {
+    // 0..31
+    while (slot <= std.math.maxInt(u5)) : (slot += 1) {
+        if (PciDevice.init(0, slot, 0)) |dev| {
             var function: u3 = 0;
-            while (function < 8) : (function += 1) {
+            // 0..7
+            while (function <= std.math.maxInt(u3)) : (function += 1) {
                 if (PciDevice.init(0, slot, function)) |vf| {
                     if (vf.driver()) |d| d.init(vf);
                 }
@@ -130,11 +128,13 @@ pub fn scan() void {
 
 pub fn lspci() void {
     var slot: u5 = 0;
-    println("b:s.f c,s (ss)      v      d      drv");
-    while (slot < 31) : (slot += 1) {
-        if (PciDevice.init(0, slot, 0)) |device| {
+    println("b:s.f c,s      v      d      drv");
+    // 0..31
+    while (slot <= std.math.maxInt(u5)) : (slot += 1) {
+        if (PciDevice.init(0, slot, 0)) |dev| {
             var function: u3 = 0;
-            while (function < 8) : (function += 1) {
+            // 0..7
+            while (function <= std.math.maxInt(u3)) : (function += 1) {
                 if (PciDevice.init(0, slot, function)) |vf| {
                     vf.format();
                 }

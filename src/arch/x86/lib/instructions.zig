@@ -16,9 +16,7 @@ pub inline fn ltr(desc: u16) void {
 //
 pub inline fn hang() noreturn {
     asm volatile ("cli");
-    while (true) {
-        asm volatile ("hlt");
-    }
+    while (true) asm volatile ("hlt");
 }
 
 pub inline fn sti() void {

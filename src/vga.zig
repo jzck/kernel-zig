@@ -3,14 +3,16 @@ const mem = @import("std").mem;
 const arch = @import("arch/x86/lib/index.zig");
 const std = @import("std");
 
-// VRAM buffer address in physical memory.
-pub const VRAM_ADDR = 0xB8000;
-pub const VRAM_SIZE = 0x8000;
 // Screen size.
 pub const VGA_WIDTH = 80;
 pub const VGA_HEIGHT = 25;
 pub const VGA_SIZE = VGA_WIDTH * VGA_HEIGHT;
-pub var vga = VGA.init(VRAM_ADDR);
+pub var vga = VGA{
+    .vram = @intToPtr([*]VGAEntry, 0xb8000)[0..0x4000],
+    .cursor = 0,
+    .foreground = Color.Black,
+    .background = Color.Brown,
+};
 
 // Color codes.
 pub const Color = enum(u4) {
@@ -39,17 +41,13 @@ pub const VGAEntry = packed struct {
     background: Color,
 };
 
-////
 // Enable hardware cursor.
-//
 pub fn enableCursor() void {
     outb(0x3D4, 0x0A);
     outb(0x3D5, 0x00);
 }
 
-////
 // Disable hardware cursor.
-//
 pub fn disableCursor() void {
     outb(0x3D4, 0x0A);
     outb(0x3D5, 1 << 5);
@@ -72,33 +70,14 @@ fn printCallback(context: void, string: []const u8) Errors!void {
 }
 
 // VGA status.
-pub const VGA = struct {
+const VGA = struct {
     vram: []VGAEntry,
     cursor: usize,
     foreground: Color,
     background: Color,
 
     ////
-    // Initialize the VGA status.
-    //
-    // Arguments:
-    //     vram: The address of the VRAM buffer.
-    //
-    // Returns:
-    //     A structure holding the VGA status.
-    //
-    pub fn init(vram: usize) VGA {
-        return VGA{
-            .vram = @intToPtr([*]VGAEntry, vram)[0..0x4000],
-            .cursor = 0,
-            .foreground = Color.Black,
-            .background = Color.Brown,
-        };
-    }
-
-    ////
     // Clear the screen.
-    //
     pub fn clear(self: *VGA) void {
         mem.set(VGAEntry, self.vram[0..VGA_SIZE], self.entry(' '));
 
@@ -131,12 +110,9 @@ pub const VGA = struct {
                     self.writeChar(' ');
             },
             // Backspace.
-            // FIXME: hardcoded 8 here is horrible.
-            8 => {
+            '\x08' => {
                 self.cursor -= 1;
-                // self.writeChar(' ');
                 self.vram[self.cursor] = self.entry(' ');
-                // self.cursor -= 1;
             },
             // Any other character.
             else => {

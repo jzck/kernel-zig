@@ -69,25 +69,19 @@ const KEYMAP_US = [_][2]u8{
 
 fn ps2_scancode() u8 {
     var scancode: u8 = 0;
-    while (true) {
-        if (x86.inb(PS2_DATA) != scancode) {
-            scancode = x86.inb(PS2_DATA);
-            if (scancode > 0)
-                return scancode;
-        }
-    }
+    while (true) if (x86.inb(PS2_DATA) != scancode) {
+        scancode = x86.inb(PS2_DATA);
+        if (scancode > 0) return scancode;
+    };
 }
 
 fn key_isrelease(scancode: u8) bool {
-    return (scancode & 1 << 7 != 0);
+    return scancode & (1 << 7) != 0;
 }
 
 pub fn keyboard_handler() void {
     const scancode = ps2_scancode();
-    const isrelease = key_isrelease(scancode);
-    if (isrelease) {
-        return;
-    }
-    const shift = false;
+    if (key_isrelease(scancode)) return; // don't process releases
+    const shift = false; // don't know about modifiers yet
     console.keypress(KEYMAP_US[scancode][if (shift) 1 else 0]);
 }

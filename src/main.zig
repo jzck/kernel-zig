@@ -8,16 +8,14 @@ const assert = @import("std").debug.assert;
 
 // arch independant initialization
 export fn kmain(magic: u32, info: *const MultibootInfo) noreturn {
-    clear();
     assert(magic == MULTIBOOT_BOOTLOADER_MAGIC);
+
+    clear();
     println("--- x86 initialization ---");
-
     x86.x86_main(info);
-
     println("--- core initialization ---");
     pci.scan();
     console.initialize();
-    while (true) {
-        asm volatile ("hlt");
-    }
+
+    while (true) asm volatile ("hlt");
 }

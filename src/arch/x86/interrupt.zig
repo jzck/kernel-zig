@@ -164,15 +164,13 @@ fn remapPIC() void {
 }
 
 pub fn maskIRQ(irq: u8, mask: bool) void {
-    if (irq > 15) {
-        return;
-    }
+    if (irq > 15) return;
     // Figure out if master or slave PIC owns the IRQ.
     const port = if (irq < 8) u16(PIC1_DATA) else u16(PIC2_DATA);
     const old = x86.inb(port); // Retrieve the current mask.
 
     // Mask or unmask the interrupt.
-    const shift = @intCast(u3, irq % 8); // TODO: waiting for Andy to fix this.
+    const shift = @intCast(u3, irq % 8);
     if (mask) {
         x86.outb(port, old | (u8(1) << shift));
     } else {

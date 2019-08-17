@@ -80,19 +80,6 @@ pub const Registers = packed struct {
     edx: u32,
     ecx: u32,
     eax: u32,
-
-    pub fn init() Registers {
-        return Registers{
-            .edi = 0,
-            .esi = 0,
-            .ebp = 0,
-            .esp = 0,
-            .ebx = 0,
-            .edx = 0,
-            .ecx = 0,
-            .eax = 0,
-        };
-    }
 };
 
 // Pointer to the current saved context.

@@ -8,6 +8,15 @@ const gdt = @import("gdt.zig");
 pub const INTERRUPT_GATE = 0x8E;
 pub const SYSCALL_GATE = 0xEE;
 
+// Interrupt Descriptor Table.
+var idt: [256]IDTEntry = undefined;
+
+// IDT descriptor register pointing at the IDT.
+const idtr = IDTRegister{
+    .limit = u16(@sizeOf(@typeOf(idt))),
+    .base = &idt,
+};
+
 // Structure representing an entry in the IDT.
 const IDTEntry = packed struct {
     offset_low: u16,
@@ -23,16 +32,6 @@ const IDTRegister = packed struct {
     base: *[256]IDTEntry,
 };
 
-// Interrupt Descriptor Table.
-var idt: [256]IDTEntry = undefined;
-
-// IDT descriptor register pointing at the IDT.
-const idtr = IDTRegister{
-    .limit = u16(@sizeOf(@typeOf(idt))),
-    .base = &idt,
-};
-
-////
 // Setup an IDT entry.
 //
 // Arguments:
@@ -50,9 +49,7 @@ pub fn setGate(n: u8, flags: u8, offset: extern fn () void) void {
     idt[n].selector = gdt.KERNEL_CODE;
 }
 
-////
 // Initialize the Interrupt Descriptor Table.
-//
 pub fn initialize() void {
     // configure PIC and set ISRs
     interrupt.initialize();

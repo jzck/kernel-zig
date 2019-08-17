@@ -22,9 +22,7 @@ pub var pageDirectory: [1024]PageEntry align(4096) linksection(".bss") = [_]Page
 
 fn pageFault() void {
     println("pagefault");
-    while (true) {
-        asm volatile ("hlt");
-    }
+    while (true) asm volatile ("hlt");
 }
 
 fn pageBase(addr: usize) usize {
@@ -44,21 +42,17 @@ pub fn translate(virt: usize) ?usize {
 }
 
 pub fn unmap(virt: usize) void {
-    var pte = pte(virt);
-    if (pte.* == 0) {
+    if (translate(virt)) |phys| {
+        memory.free(translate(virt));
+    } else {
         println("can't unmap 0x{x}, map is empty.", addr);
-        return;
     }
-    pte.* = 0;
-    memory.free(translate(virt));
 }
 
 pub fn mmap(virt: usize, phys: ?usize) void {
-    var pde: *PageEntry = &PD[virt >> 22];
-    if (pde.* == 0) {
-        pde.* = memory.allocate() | WRITE | PRESENT;
-    }
-    var pte: *PageEntry = &PT[virt >> 12];
+    var pde: *PageEntry = pde(virt);
+    if (pde.* == 0) pde.* = memory.allocate() | WRITE | PRESENT;
+    var pte: *PageEntry = pte(virt);
     pte.* = if (phys) |p| p else allocate() | PRESENT;
 }
 
@@ -66,35 +60,27 @@ pub fn addrspace() void {
     var i: usize = 1;
     i = 0;
     while (i < 1024) : (i += 1) {
-        if (PD[i] == 0) {
-            continue;
-        }
+        if (PD[i] == 0) continue;
         println("p2[{}] -> 0x{x}", i, PD[i]);
-        if (PD[i] & HUGE != 0) {
-            continue;
-        }
+        if (PD[i] & HUGE != 0) continue;
         var j: usize = 0;
         while (j < 1024) : (j += 1) {
             var entry: PageEntry = PT[i * 1024 + j];
-            if (entry != 0) {
-                println("p2[{}]p1[{}] -> 0x{x}", i, j, entry);
-            }
+            if (entry != 0) println("p2[{}]p1[{}] -> 0x{x}", i, j, entry);
         }
     }
 }
 
 pub fn initialize() void {
     var p2 = pageDirectory[0..];
-    // identity map 0 -> 4MB
 
+    // identity map 0 -> 4MB
     p2[0] = 0x000000 | PRESENT | WRITE | HUGE;
+    // recursive mapping
     p2[1023] = @ptrToInt(&p2[0]) | PRESENT | WRITE;
 
     assert(memory.stack_end < 0x400000);
-    // const first: *u32 = @ptrCast(*u32, p2);
-    // println("p2[0] {b}", first.*);
 
     interrupt.register(14, pageFault);
     setupPaging(@ptrToInt(&pageDirectory[0]));
-    // const addr = mapper.translate(0xfffff000);
 }
