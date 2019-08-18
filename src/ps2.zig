@@ -1,6 +1,5 @@
-usingnamespace @import("vga.zig");
-const x86 = @import("arch/x86/lib/index.zig");
-const console = @import("console.zig");
+usingnamespace @import("kernel");
+const x86 = @import("x86");
 
 const PS2_DATA = 0x60;
 const PS2_STATUS = 0x64;

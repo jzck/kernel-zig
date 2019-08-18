@@ -1,8 +1,5 @@
-const x86 = @import("lib/index.zig");
-const memory = @import("memory.zig");
-const interrupt = @import("interrupt.zig");
-const assert = @import("std").debug.assert;
-const println = @import("../../vga.zig").println;
+usingnamespace @import("kernel");
+usingnamespace @import("x86");
 
 extern fn setupPaging(phys_pd: usize) void;
 

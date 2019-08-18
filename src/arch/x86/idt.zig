@@ -1,8 +1,6 @@
 // https://wiki.osdev.org/IDT
-usingnamespace @import("../../vga.zig");
-const x86 = @import("lib/index.zig");
-const interrupt = @import("interrupt.zig");
-const gdt = @import("gdt.zig");
+usingnamespace @import("kernel");
+usingnamespace @import("x86");
 
 // Types of gates.
 pub const INTERRUPT_GATE = 0x8E;
@@ -55,5 +53,5 @@ pub fn initialize() void {
     interrupt.initialize();
 
     // load IDT
-    x86.lidt(@ptrToInt(&idtr));
+    lidt(@ptrToInt(&idtr));
 }

@@ -1,6 +1,4 @@
-usingnamespace @import("kernel").multiboot;
-usingnamespace @import("kernel").vga;
-const assert = @import("std").debug.assert;
+usingnamespace @import("kernel");
 
 var stack: [*]usize = undefined; // Stack of free physical page.
 var stack_index: usize = 0; // Index into the stack.

@@ -1,6 +1,6 @@
-const x86 = @import("lib/index.zig");
+usingnamespace @import("kernel");
+const x86 = @import("x86");
 const isr = @import("isr.zig");
-const println = @import("../../vga.zig").println;
 
 // PIC ports.
 const PIC1_CMD = 0x20;

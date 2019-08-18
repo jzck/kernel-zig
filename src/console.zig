@@ -1,16 +1,11 @@
-const interrupt = @import("arch/x86/interrupt.zig");
-const paging = @import("arch/x86/paging.zig");
-const ps2 = @import("ps2.zig");
-const pci = @import("pci.zig");
-const mem = @import("std").mem;
-usingnamespace @import("vga.zig");
+usingnamespace @import("kernel");
 
 var command: [10]u8 = undefined;
 var command_len: usize = 0;
 
 fn execute(com: []u8) void {
-    if (mem.eql(u8, com, "lspci")) pci.lspci();
-    if (mem.eql(u8, com, "paging")) paging.addrspace();
+    if (@import("std").mem.eql(u8, com, "lspci")) pci.lspci();
+    if (@import("std").mem.eql(u8, com, "paging")) x86.paging.addrspace();
 }
 
 pub fn keypress(char: u8) void {
@@ -35,6 +30,6 @@ pub fn keypress(char: u8) void {
 }
 
 pub fn initialize() void {
-    interrupt.registerIRQ(1, ps2.keyboard_handler);
+    @import("x86").interrupt.registerIRQ(1, ps2.keyboard_handler);
     print("> ");
 }

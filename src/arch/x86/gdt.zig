@@ -1,5 +1,5 @@
 // const tty = @import("tty.zig");
-const x86 = @import("lib/index.zig");
+const x86 = @import("x86");
 
 // GDT segment selectors.
 pub const KERNEL_CODE = 0x08;

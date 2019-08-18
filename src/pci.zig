@@ -1,10 +1,10 @@
-const arch = @import("arch/x86/lib/index.zig");
+usingnamespace @import("kernel");
+const arch = @import("x86");
+const std = @import("std");
+const virtio = @import("virtio.zig");
 
 const PCI_CONFIG_ADDRESS = 0xCF8;
 const PCI_CONFIG_DATA = 0xCFC;
-usingnamespace @import("vga.zig");
-const virtio = @import("virtio.zig");
-const std = @import("std");
 
 // https://wiki.osdev.org/Pci
 pub const PciAddress = packed struct {

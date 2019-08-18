@@ -1,6 +1,4 @@
-const builtin = @import("builtin");
-const mem = @import("std").mem;
-const arch = @import("arch/x86/lib/index.zig");
+const arch = @import("x86");
 const std = @import("std");
 
 // Screen size.
@@ -79,7 +77,7 @@ const VGA = struct {
     ////
     // Clear the screen.
     pub fn clear(self: *VGA) void {
-        mem.set(VGAEntry, self.vram[0..VGA_SIZE], self.entry(' '));
+        std.mem.set(VGAEntry, self.vram[0..VGA_SIZE], self.entry(' '));
 
         self.cursor = 0;
         self.updateCursor();
@@ -145,9 +143,9 @@ const VGA = struct {
         const last = VGA_SIZE - VGA_WIDTH; // Index of last line.
 
         // Copy all the screen (apart from the first line) up one line.
-        mem.copy(VGAEntry, self.vram[0..last], self.vram[first..VGA_SIZE]);
+        std.mem.copy(VGAEntry, self.vram[0..last], self.vram[first..VGA_SIZE]);
         // Clean the last line.
-        mem.set(VGAEntry, self.vram[last..VGA_SIZE], self.entry(' '));
+        std.mem.set(VGAEntry, self.vram[last..VGA_SIZE], self.entry(' '));
 
         // Bring the cursor back to the beginning of the last line.
         self.cursor -= VGA_WIDTH;

@@ -1,18 +1,13 @@
 // MULTIBOOT1
 // https://www.gnu.org/software/grub/manual/multiboot/multiboot.html
 
-// zig fmt: off
-const tty = @import("tty.zig");
-const cstr = @import("std").cstr;
-const Process = @import("process.zig").Process;
-
 // This should be in EAX.
 pub const MULTIBOOT_BOOTLOADER_MAGIC = 0x2BADB002;
 
 // Is there basic lower/upper memory information?
-pub const MULTIBOOT_INFO_MEMORY      = 0x00000001;
+pub const MULTIBOOT_INFO_MEMORY = 0x00000001;
 // Is there a full memory map?
-pub const MULTIBOOT_INFO_MEM_MAP     = 0x00000040;
+pub const MULTIBOOT_INFO_MEM_MAP = 0x00000040;
 
 // System information structure passed by the bootloader.
 pub const MultibootInfo = packed struct {
@@ -32,33 +27,33 @@ pub const MultibootInfo = packed struct {
 
     // Boot-Module list.
     mods_count: u32,
-    mods_addr:  u32,
+    mods_addr: u32,
 
     syms: extern union {
         // present if flags[4]
         nlist: extern struct {
-           tabsize: u32,
-           strsize: u32,
-           addr: u32,
-           _reserved: u32,
+            tabsize: u32,
+            strsize: u32,
+            addr: u32,
+            _reserved: u32,
         },
         // present if flags[5]
         shdr: extern struct {
-           num: u32,
-           size: u32,
-           addr: u32,
-           shndx: u32,
+            num: u32,
+            size: u32,
+            addr: u32,
+            shndx: u32,
         },
     },
 
     // Memory Mapping buffer.
     // present if flags[6]
     mmap_length: u32,
-    mmap_addr:   u32,
+    mmap_addr: u32,
 
     // Drive Info buffer.
     drives_length: u32,
-    drives_addr:   u32,
+    drives_addr: u32,
 
     // ROM configuration table.
     config_table: u32,
@@ -70,9 +65,9 @@ pub const MultibootInfo = packed struct {
     apm_table: u32,
 
     // Video.
-    vbe_control_info:  u32,
-    vbe_mode_info:     u32,
-    vbe_mode:          u16,
+    vbe_control_info: u32,
+    vbe_mode_info: u32,
+    vbe_mode: u16,
     vbe_interface_seg: u16,
     vbe_interface_off: u16,
     vbe_interface_len: u16,
@@ -109,30 +104,30 @@ pub const MultibootInfo = packed struct {
 
 // Types of memory map entries.
 pub const MULTIBOOT_MEMORY_AVAILABLE = 1;
-pub const MULTIBOOT_MEMORY_RESERVED  = 2;
+pub const MULTIBOOT_MEMORY_RESERVED = 2;
 
 // Entries in the memory map.
 pub const MultibootMMapEntry = packed struct {
     size: u32,
     addr: u64,
-    len:  u64,
+    len: u64,
     type: u32,
 };
 
 pub const MultibootModule = packed struct {
     // The memory used goes from bytes 'mod_start' to 'mod_end-1' inclusive.
     mod_start: u32,
-    mod_end:   u32,
+    mod_end: u32,
 
-    cmdline:   u32,  // Module command line.
-    pad:       u32,  // Padding to take it to 16 bytes (must be zero).
+    cmdline: u32, // Module command line.
+    pad: u32, // Padding to take it to 16 bytes (must be zero).
 };
 
 // Multiboot structure to be read by the bootloader.
 const MultibootHeader = packed struct {
-    magic:    u32,  // Must be equal to header magic number.
-    flags:    u32,  // Feature flags.
-    checksum: u32,  // Above fields plus this one must equal 0 mod 2^32.
+    magic: u32, // Must be equal to header magic number.
+    flags: u32, // Feature flags.
+    checksum: u32, // Above fields plus this one must equal 0 mod 2^32.
     // following fields are used if flag bit 16 is specified
     header_addr: u32 = 0,
     load_addr: u32 = 0,
@@ -144,15 +139,15 @@ const MultibootHeader = packed struct {
 
 // Place the header at the very beginning of the binary.
 export const multiboot_header align(4) linksection(".multiboot") = multiboot: {
-    const MAGIC   = u32(0x1BADB002);  // multiboot magic
-    const ALIGN   = u32(1 << 0);      // Align loaded modules at 4k
-    const MEMINFO = u32(1 << 1);      // Receive a memory map from the bootloader.
-    const ADDR     = u32(1 << 16);    // Load specific addr
-    const FLAGS   = ALIGN | MEMINFO;  // Combine the flags.
+    const MAGIC = u32(0x1BADB002); // multiboot magic
+    const ALIGN = u32(1 << 0); // Align loaded modules at 4k
+    const MEMINFO = u32(1 << 1); // Receive a memory map from the bootloader.
+    const ADDR = u32(1 << 16); // Load specific addr
+    const FLAGS = ALIGN | MEMINFO; // Combine the flags.
 
-    break :multiboot MultibootHeader {
-        .magic    = MAGIC,
-        .flags    = FLAGS,
+    break :multiboot MultibootHeader{
+        .magic = MAGIC,
+        .flags = FLAGS,
         .checksum = ~(MAGIC +% FLAGS) +% 1,
     };
 };

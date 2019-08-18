@@ -1,4 +1,4 @@
-const idt = @import("idt.zig");
+usingnamespace @import("x86");
 
 // Interrupt Service Routines defined externally in assembly.
 extern fn isr0() void;
