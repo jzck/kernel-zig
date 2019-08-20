@@ -1,5 +1,6 @@
 usingnamespace @import("lib/io.zig");
 usingnamespace @import("lib/instructions.zig");
+usingnamespace @import("main.zig");
 
 const memory = @import("memory.zig");
 const paging = @import("paging.zig");

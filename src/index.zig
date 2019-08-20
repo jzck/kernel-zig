@@ -1,8 +1,8 @@
-usingnamespace @import("vga.zig");
-const main = @import("main.zig");
-const multiboot = @import("multiboot.zig");
-const console = @import("console.zig");
-const pci = @import("pci.zig");
-const ps2 = @import("ps2.zig");
+pub usingnamespace @import("vga.zig");
+pub const main = @import("main.zig");
+pub const multiboot = @import("multiboot.zig");
+pub const console = @import("console.zig");
+pub const pci = @import("pci.zig");
+pub const ps2 = @import("ps2.zig");
 
-const assert = @import("std").debug.assert;
+pub const assert = @import("std").debug.assert;
