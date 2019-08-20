@@ -24,7 +24,7 @@ pub const PciDevice = struct {
 
     pub fn init(bus: u8, slot: u5, function: u3) ?PciDevice {
         var dev = PciDevice{ .bus = bus, .slot = slot, .function = function };
-        dev.vendor = dev.config_read(u16, 0);
+        dev.vendor = dev.vendor();
         if (dev.vendor == 0xffff) return null;
         return dev;
     }
@@ -65,7 +65,20 @@ pub const PciDevice = struct {
         return null;
     }
 
-    // all pci device must implement these
+    // 0                   1                   2                   3
+    // 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    // |           vendor ID           |           device ID           |
+    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    // |            command            |             status            |
+    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    // |  revision ID  |    prog IF    |    subclass   |     class     |
+    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    // |cache line size| latency timer |   header type |      bist     |
+    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    pub fn vendor(self: PciDevice) u16 {
+        return self.config_read(u16, 0x0);
+    }
     pub fn device(self: PciDevice) u16 {
         return self.config_read(u16, 0x2);
     }
