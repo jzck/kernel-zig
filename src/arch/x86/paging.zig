@@ -1,5 +1,5 @@
-usingnamespace @import("kernel");
-usingnamespace @import("x86");
+usingnamespace @import("index.zig");
+// usingnamespace @import("x86");
 
 extern fn setupPaging(phys_pd: usize) void;
 

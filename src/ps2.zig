@@ -1,5 +1,5 @@
-usingnamespace @import("kernel");
-const x86 = @import("x86");
+usingnamespace @import("index.zig");
+// const x86 = @import("x86");
 
 const PS2_DATA = 0x60;
 const PS2_STATUS = 0x64;

@@ -1,18 +1,19 @@
 // https://wiki.osdev.org/IDT
-usingnamespace @import("kernel");
-usingnamespace @import("x86");
+// usingnamespace @import("kernel");
+// usingnamespace @import("x86");
+usingnamespace @import("index.zig");
 
 // Types of gates.
 pub const INTERRUPT_GATE = 0x8E;
 pub const SYSCALL_GATE = 0xEE;
 
 // Interrupt Descriptor Table.
-var idt: [256]IDTEntry = undefined;
+var idt_table: [256]IDTEntry = undefined;
 
 // IDT descriptor register pointing at the IDT.
 const idtr = IDTRegister{
-    .limit = u16(@sizeOf(@typeOf(idt))),
-    .base = &idt,
+    .limit = u16(@sizeOf(@typeOf(idt_table))),
+    .base = &idt_table,
 };
 
 // Structure representing an entry in the IDT.
@@ -40,11 +41,11 @@ const IDTRegister = packed struct {
 pub fn setGate(n: u8, flags: u8, offset: extern fn () void) void {
     const intOffset = @ptrToInt(offset);
 
-    idt[n].offset_low = @truncate(u16, intOffset);
-    idt[n].offset_high = @truncate(u16, intOffset >> 16);
-    idt[n].flags = flags;
-    idt[n].zero = 0;
-    idt[n].selector = gdt.KERNEL_CODE;
+    idt_table[n].offset_low = @truncate(u16, intOffset);
+    idt_table[n].offset_high = @truncate(u16, intOffset >> 16);
+    idt_table[n].flags = flags;
+    idt_table[n].zero = 0;
+    idt_table[n].selector = gdt.KERNEL_CODE;
 }
 
 // Initialize the Interrupt Descriptor Table.

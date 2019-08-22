@@ -1,4 +1,4 @@
-const arch = @import("x86");
+const x86 = @import("arch/x86/index.zig");
 const std = @import("std");
 
 // Screen size.
@@ -156,10 +156,10 @@ const VGA = struct {
     // Use the software cursor as the source of truth.
     //
     pub fn updateCursor(self: *const VGA) void {
-        arch.outb(0x3D4, 0x0F);
-        arch.outb(0x3D5, @truncate(u8, self.cursor));
-        arch.outb(0x3D4, 0x0E);
-        arch.outb(0x3D5, @truncate(u8, self.cursor >> 8));
+        x86.outb(0x3D4, 0x0F);
+        x86.outb(0x3D5, @truncate(u8, self.cursor));
+        x86.outb(0x3D4, 0x0E);
+        x86.outb(0x3D5, @truncate(u8, self.cursor >> 8));
     }
 
     ////
@@ -169,11 +169,11 @@ const VGA = struct {
     pub fn fetchCursor(self: *VGA) void {
         var cursor: usize = 0;
 
-        arch.outb(0x3D4, 0x0E);
-        cursor |= usize(arch.inb(0x3D5)) << 8;
+        x86.outb(0x3D4, 0x0E);
+        cursor |= usize(x86.inb(0x3D5)) << 8;
 
-        arch.outb(0x3D4, 0x0F);
-        cursor |= arch.inb(0x3D5);
+        x86.outb(0x3D4, 0x0F);
+        cursor |= x86.inb(0x3D5);
 
         self.cursor = cursor;
     }

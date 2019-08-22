@@ -1,9 +1,15 @@
-usingnamespace @import("lib/io.zig");
-usingnamespace @import("lib/instructions.zig");
-usingnamespace @import("main.zig");
+pub usingnamespace @import("../../vga.zig");
+pub const multiboot = @import("../../multiboot.zig");
 
-const memory = @import("memory.zig");
-const paging = @import("paging.zig");
-const idt = @import("idt.zig");
-const gdt = @import("gdt.zig");
-const interrupt = @import("interrupt.zig");
+pub usingnamespace @import("lib/io.zig");
+pub usingnamespace @import("lib/instructions.zig");
+pub usingnamespace @import("main.zig");
+
+pub const memory = @import("memory.zig");
+pub const paging = @import("paging.zig");
+pub const idt = @import("idt.zig");
+pub const isr = @import("isr.zig");
+pub const gdt = @import("gdt.zig");
+pub const interrupt = @import("interrupt.zig");
+
+pub const assert = @import("std").debug.assert;

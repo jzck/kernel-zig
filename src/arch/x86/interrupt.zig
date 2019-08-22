@@ -1,6 +1,6 @@
-usingnamespace @import("kernel");
-const x86 = @import("x86");
-const isr = @import("isr.zig");
+usingnamespace @import("index.zig");
+// const x86 = @import("index.zig");
+// const isr = @import("isr.zig");
 
 // PIC ports.
 const PIC1_CMD = 0x20;
@@ -32,16 +32,17 @@ var handlers = [_]fn () void{unhandled} ** 48;
 
 fn unhandled() noreturn {
     const n = isr.context.interrupt_n;
+    print("unhandled interrupt number {d}", n);
     if (n < IRQ_0) {
-        println("unhandled exception number {d}", n);
+        println(" (exception)");
     } else {
-        println("unhandled IRQ number {d} (intr {d})", n - IRQ_0, n);
+        println(" (IRQ number {d})", n - IRQ_0);
     }
-    x86.hang();
+    hang();
 }
 
 inline fn picwait() void {
-    x86.outb(WAIT_PORT, 0);
+    outb(WAIT_PORT, 0);
 }
 
 ////
@@ -81,8 +82,8 @@ export fn interruptDispatch() void {
 
     // If no user thread is ready to run, halt here and wait for interrupts.
     // if (scheduler.current() == null) {
-    //     x86.sti();
-    //     x86.hlt();
+    //     sti();
+    //     hlt();
     // }
 }
 
@@ -92,8 +93,8 @@ inline fn spuriousIRQ(irq: u8) bool {
     // TODO: handle spurious IRQ15.
 
     // Read the value of the In-Service Register.
-    x86.outb(PIC1_CMD, ISR_READ);
-    const in_service = x86.inb(PIC1_CMD);
+    outb(PIC1_CMD, ISR_READ);
+    const in_service = inb(PIC1_CMD);
 
     // Verify whether IRQ7 is set in the ISR.
     return (in_service & (1 << 7)) == 0;
@@ -103,11 +104,11 @@ inline fn startOfInterrupt(irq: u8) void {
     // mask the irq and then ACK
     if (irq >= 8) {
         maskIRQ(irq, true);
-        x86.outb(PIC1_CMD, ACK);
-        x86.outb(PIC2_CMD, ACK);
+        outb(PIC1_CMD, ACK);
+        outb(PIC2_CMD, ACK);
     } else {
         maskIRQ(irq, true);
-        x86.outb(PIC1_CMD, ACK);
+        outb(PIC1_CMD, ACK);
     }
 }
 
@@ -115,10 +116,10 @@ inline fn endOfInterrupt(irq: u8) void {
     // unmask the irq and then ACK
     if (irq >= 8) {
         maskIRQ(irq, false);
-        x86.outb(PIC2_CMD, ACK);
+        outb(PIC2_CMD, ACK);
     } else {
         maskIRQ(irq, false);
-        x86.outb(PIC1_CMD, ACK);
+        outb(PIC1_CMD, ACK);
     }
 }
 
@@ -133,33 +134,33 @@ pub fn registerIRQ(irq: u8, handler: fn () void) void {
 
 fn remapPIC() void {
     // ICW1: start initialization sequence.
-    x86.outb(PIC1_CMD, ICW1_INIT | ICW1_ICW4);
+    outb(PIC1_CMD, ICW1_INIT | ICW1_ICW4);
     picwait();
-    x86.outb(PIC2_CMD, ICW1_INIT | ICW1_ICW4);
+    outb(PIC2_CMD, ICW1_INIT | ICW1_ICW4);
     picwait();
 
     // ICW2: Interrupt Vector offsets of IRQs.
-    x86.outb(PIC1_DATA, IRQ_0); // IRQ 0..7  -> Interrupt 32..39
+    outb(PIC1_DATA, IRQ_0); // IRQ 0..7  -> Interrupt 32..39
     picwait();
-    x86.outb(PIC2_DATA, IRQ_0 + 8); // IRQ 8..15 -> Interrupt 40..47
+    outb(PIC2_DATA, IRQ_0 + 8); // IRQ 8..15 -> Interrupt 40..47
     picwait();
 
     // ICW3: IRQ line 2 to connect master to slave PIC.
-    x86.outb(PIC1_DATA, 1 << 2);
+    outb(PIC1_DATA, 1 << 2);
     picwait();
-    x86.outb(PIC2_DATA, 2);
+    outb(PIC2_DATA, 2);
     picwait();
 
     // ICW4: 80x86 mode.
-    x86.outb(PIC1_DATA, ICW4_8086);
+    outb(PIC1_DATA, ICW4_8086);
     picwait();
-    x86.outb(PIC2_DATA, ICW4_8086);
+    outb(PIC2_DATA, ICW4_8086);
     picwait();
 
     // Mask all IRQs.
-    x86.outb(PIC1_DATA, 0xFF);
+    outb(PIC1_DATA, 0xFF);
     picwait();
-    x86.outb(PIC2_DATA, 0xFF);
+    outb(PIC2_DATA, 0xFF);
     picwait();
 }
 
@@ -167,16 +168,16 @@ pub fn maskIRQ(irq: u8, mask: bool) void {
     if (irq > 15) return;
     // Figure out if master or slave PIC owns the IRQ.
     const port = if (irq < 8) u16(PIC1_DATA) else u16(PIC2_DATA);
-    const old = x86.inb(port); // Retrieve the current mask.
+    const old = inb(port); // Retrieve the current mask.
 
     // Mask or unmask the interrupt.
     const shift = @intCast(u3, irq % 8);
     if (mask) {
-        x86.outb(port, old | (u8(1) << shift));
+        outb(port, old | (u8(1) << shift));
     } else {
-        x86.outb(port, old & ~(u8(1) << shift));
+        outb(port, old & ~(u8(1) << shift));
     }
-    const new = x86.inb(port); // Retrieve the current mask.
+    const new = inb(port); // Retrieve the current mask.
 }
 
 ////

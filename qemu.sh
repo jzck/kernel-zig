@@ -12,8 +12,8 @@ start() {
         -m 1337M \
         -curses \
         -append "Hello" \
-        -drive file=disk.img,if=virtio\
         -kernel ${KERNEL}
+        # -drive file=disk.img,if=virtio\
         # -no-reboot \
         # -device virtio-net,netdev=network0 -netdev tap,id=network0,ifname=tap0,script=no,downscript=no \
 	# build/kernel.iso

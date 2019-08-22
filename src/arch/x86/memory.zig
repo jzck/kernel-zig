@@ -1,4 +1,4 @@
-usingnamespace @import("kernel");
+usingnamespace @import("index.zig");
 
 var stack: [*]usize = undefined; // Stack of free physical page.
 var stack_index: usize = 0; // Index into the stack.
@@ -51,10 +51,10 @@ pub fn free(address: usize) void {
 // Arguments:
 //     info: Information structure from bootloader.
 //
-pub fn initialize(info: *const MultibootInfo) void {
+pub fn initialize(info: *const multiboot.MultibootInfo) void {
     // Ensure the bootloader has given us the memory map.
-    assert((info.flags & MULTIBOOT_INFO_MEMORY) != 0);
-    assert((info.flags & MULTIBOOT_INFO_MEM_MAP) != 0);
+    assert((info.flags & multiboot.MULTIBOOT_INFO_MEMORY) != 0);
+    assert((info.flags & multiboot.MULTIBOOT_INFO_MEM_MAP) != 0);
 
     // Place the stack of free pages after the last Multiboot module.
     stack = @intToPtr([*]usize, 0x200000);
@@ -65,7 +65,7 @@ pub fn initialize(info: *const MultibootInfo) void {
 
     var map: usize = info.mmap_addr;
     while (map < info.mmap_addr + info.mmap_length) {
-        var entry = @intToPtr(*MultibootMMapEntry, map);
+        var entry = @intToPtr(*multiboot.MultibootMMapEntry, map);
 
         // Calculate the start and end of this memory area.
         var start = @truncate(usize, entry.addr);
@@ -74,7 +74,7 @@ pub fn initialize(info: *const MultibootInfo) void {
         start = if (start >= stack_end) start else stack_end;
 
         // Flag all the pages in this memory area as free.
-        if (entry.type == MULTIBOOT_MEMORY_AVAILABLE) while (start < end) : (start += PAGE_SIZE)
+        if (entry.type == multiboot.MULTIBOOT_MEMORY_AVAILABLE) while (start < end) : (start += PAGE_SIZE)
             free(start);
 
         // Go to the next entry in the memory map.

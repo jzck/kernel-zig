@@ -7,7 +7,6 @@ pub fn build(b: *Builder) void {
     kernel.addPackagePath("x86", "src/arch/x86/index.zig");
     kernel.setOutputDir("build");
 
-    // kernel.addAssemblyFile("src/arch/x86/_start.s");
     kernel.addAssemblyFile("src/arch/x86/gdt.s");
     kernel.addAssemblyFile("src/arch/x86/isr.s");
     kernel.addAssemblyFile("src/arch/x86/paging.s");

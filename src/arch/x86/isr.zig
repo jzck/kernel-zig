@@ -1,4 +1,4 @@
-usingnamespace @import("x86");
+usingnamespace @import("index.zig");
 
 // Interrupt Service Routines defined externally in assembly.
 extern fn isr0() void;

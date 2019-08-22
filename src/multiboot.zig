@@ -124,7 +124,7 @@ pub const MultibootModule = packed struct {
 };
 
 // Multiboot structure to be read by the bootloader.
-const MultibootHeader = packed struct {
+pub const MultibootHeader = packed struct {
     magic: u32, // Must be equal to header magic number.
     flags: u32, // Feature flags.
     checksum: u32, // Above fields plus this one must equal 0 mod 2^32.
@@ -136,18 +136,3 @@ const MultibootHeader = packed struct {
     entry_addr: u32 = 0,
 };
 // NOTE: this structure is incomplete.
-
-// Place the header at the very beginning of the binary.
-export const multiboot_header align(4) linksection(".multiboot") = multiboot: {
-    const MAGIC = u32(0x1BADB002); // multiboot magic
-    const ALIGN = u32(1 << 0); // Align loaded modules at 4k
-    const MEMINFO = u32(1 << 1); // Receive a memory map from the bootloader.
-    const ADDR = u32(1 << 16); // Load specific addr
-    const FLAGS = ALIGN | MEMINFO; // Combine the flags.
-
-    break :multiboot MultibootHeader{
-        .magic = MAGIC,
-        .flags = FLAGS,
-        .checksum = ~(MAGIC +% FLAGS) +% 1,
-    };
-};

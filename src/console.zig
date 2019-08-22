@@ -1,4 +1,4 @@
-usingnamespace @import("kernel");
+usingnamespace @import("index.zig");
 
 var command: [10]u8 = undefined;
 var command_len: usize = 0;
@@ -30,6 +30,6 @@ pub fn keypress(char: u8) void {
 }
 
 pub fn initialize() void {
-    @import("x86").interrupt.registerIRQ(1, ps2.keyboard_handler);
+    x86.interrupt.registerIRQ(1, ps2.keyboard_handler);
     print("> ");
 }
