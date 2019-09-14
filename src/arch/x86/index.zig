@@ -1,5 +1,6 @@
 pub usingnamespace @import("../../vga.zig");
 pub const multiboot = @import("../../multiboot.zig");
+pub const time = @import("../../time.zig");
 
 pub usingnamespace @import("lib/io.zig");
 pub usingnamespace @import("lib/instructions.zig");

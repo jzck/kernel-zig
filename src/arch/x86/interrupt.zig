@@ -1,6 +1,4 @@
 usingnamespace @import("index.zig");
-// const x86 = @import("index.zig");
-// const isr = @import("isr.zig");
 
 // PIC ports.
 const PIC1_CMD = 0x20;
@@ -16,6 +14,11 @@ const ICW1_ICW4 = 0x01;
 const ICW4_8086 = 0x01;
 // write 0 to wait
 const WAIT_PORT = 0x80;
+// PIT Channels
+const PIT_CHAN0 = 0x40;
+const PIT_CHAN1 = 0x41;
+const PIT_CHAN2 = 0x42;
+const PIT_CMD = 0x43;
 // Interrupt Vector offsets of exceptions.
 const EXCEPTION_0 = 0;
 const EXCEPTION_31 = EXCEPTION_0 + 31;
@@ -132,7 +135,7 @@ pub fn registerIRQ(irq: u8, handler: fn () void) void {
     maskIRQ(irq, false); // Unmask the IRQ.
 }
 
-fn remapPIC() void {
+pub fn remapPIC() void {
     // ICW1: start initialization sequence.
     outb(PIC1_CMD, ICW1_INIT | ICW1_ICW4);
     picwait();
@@ -180,10 +183,21 @@ pub fn maskIRQ(irq: u8, mask: bool) void {
     const new = inb(port); // Retrieve the current mask.
 }
 
-////
-// Initialize interrupts.
-//
-pub fn initialize() void {
-    remapPIC();
-    isr.install();
+// configures the chan0 with a rate generator, which will trigger irq0
+pub fn configPIT() void {
+    const chanNum = 0;
+    const chan = PIT_CHAN0;
+    const divisor = 2685;
+    const LOHI = 0b11; // bit4 | bit5
+    const PITMODE_RATE_GEN = 0x2;
+    outb(PIT_CMD, chanNum << 6 | LOHI << 4 | PITMODE_RATE_GEN << 1);
+    outb(PIT_CHAN0, divisor & 0xff);
+    outb(PIT_CHAN0, divisor >> 8);
+}
+
+pub fn pit_handler() void {
+    // pit freq = 1.193182 MHz
+    // chan0 divisor = 2685
+    // PIT_RATE in us
+    time.increment(2251);
 }

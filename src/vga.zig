@@ -1,3 +1,5 @@
+// usingnamespace @import("index.zig");
+const time = @import("time.zig");
 const x86 = @import("arch/x86/index.zig");
 const std = @import("std");
 
@@ -7,7 +9,7 @@ pub const VGA_HEIGHT = 25;
 pub const VGA_SIZE = VGA_WIDTH * VGA_HEIGHT;
 pub var vga = VGA{
     .vram = @intToPtr([*]VGAEntry, 0xb8000)[0..0x4000],
-    .cursor = 0,
+    .cursor = 80 * 2,
     .foreground = Color.Black,
     .background = Color.Brown,
 };
@@ -62,6 +64,18 @@ pub fn println(comptime format: []const u8, args: ...) void {
 pub fn clear() void {
     vga.clear();
 }
+pub fn topbar() void {
+    const cursor = vga.cursor;
+    const bg = vga.background;
+    vga.cursor = 0;
+    vga.background = Color.Red;
+
+    const offset_ms = time.offset_us / 1000;
+    println("{}.{}", time.offset_s, offset_ms / 10);
+
+    vga.cursor = cursor;
+    vga.background = bg;
+}
 
 fn printCallback(context: void, string: []const u8) Errors!void {
     vga.writeString(string);
@@ -79,7 +93,7 @@ const VGA = struct {
     pub fn clear(self: *VGA) void {
         std.mem.set(VGAEntry, self.vram[0..VGA_SIZE], self.entry(' '));
 
-        self.cursor = 0;
+        self.cursor = 80; // skip 1 line for topbar
         self.updateCursor();
     }
 

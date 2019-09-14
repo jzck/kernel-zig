@@ -50,8 +50,14 @@ pub fn setGate(n: u8, flags: u8, offset: extern fn () void) void {
 
 // Initialize the Interrupt Descriptor Table.
 pub fn initialize() void {
-    // configure PIC and set ISRs
-    interrupt.initialize();
+    // configure PIC
+    interrupt.remapPIC();
+    interrupt.configPIT();
+    // install ISRs
+    isr.install_exceptions();
+    isr.install_irqs();
+    isr.install_syscalls();
+    interrupt.registerIRQ(0, interrupt.pit_handler);
 
     // load IDT
     lidt(@ptrToInt(&idtr));

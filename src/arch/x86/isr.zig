@@ -87,9 +87,8 @@ pub export var context: *volatile Context = undefined;
 ////
 // Install the Interrupt Service Routines in the IDT.
 //
-pub fn install() void {
+pub fn install_exceptions() void {
     // Exceptions.
-    idt.setGate(0, idt.INTERRUPT_GATE, isr0);
     idt.setGate(1, idt.INTERRUPT_GATE, isr1);
     idt.setGate(2, idt.INTERRUPT_GATE, isr2);
     idt.setGate(3, idt.INTERRUPT_GATE, isr3);
@@ -121,8 +120,10 @@ pub fn install() void {
     idt.setGate(29, idt.INTERRUPT_GATE, isr29);
     idt.setGate(30, idt.INTERRUPT_GATE, isr30);
     idt.setGate(31, idt.INTERRUPT_GATE, isr31);
+}
 
-    // IRQs.
+// IRQs.
+pub fn install_irqs() void {
     idt.setGate(32, idt.INTERRUPT_GATE, isr32);
     idt.setGate(33, idt.INTERRUPT_GATE, isr33);
     idt.setGate(34, idt.INTERRUPT_GATE, isr34);
@@ -139,7 +140,9 @@ pub fn install() void {
     idt.setGate(45, idt.INTERRUPT_GATE, isr45);
     idt.setGate(46, idt.INTERRUPT_GATE, isr46);
     idt.setGate(47, idt.INTERRUPT_GATE, isr47);
+}
 
-    // Syscalls.
+// Syscalls.
+pub fn install_syscalls() void {
     idt.setGate(128, idt.SYSCALL_GATE, isr128);
 }

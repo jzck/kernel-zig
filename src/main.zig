@@ -16,27 +16,6 @@ export const multiboot_header align(4) linksection(".multiboot") = multiboot: {
     };
 };
 
-// export var stack_bytes: [16 * 1024]u8 align(16) linksection(".bss") = undefined;
-// const stack_bytes_slice = stack_bytes[0..];
-
-// linker.ld entrypoint
-// export nakedcc fn __start() noreturn {
-//     // eax -> multiboot magic
-//     // ebx -> multiboot info
-//     const magic = asm volatile ("mov %[ret], %eax"
-//         : [ret] "=" (-> u32)
-//     );
-//     const info = asm volatile (""
-//         : [ret] "=" (-> u32)
-//     );
-//     clear();
-//     println("--- {x} ---", magic);
-//     println("--- {x} ---", info);
-//     // @newStackCall(stack_bytes_slice, kmain, magic, @intToPtr(*const multiboot.MultibootInfo, info));
-//     @newStackCall(stack_bytes_slice, kmain, magic);
-//     // @newStackCall(stack_bytes_slice, kmain);
-// }
-
 // arch independant initialization
 export fn kmain(magic: u32, info: *const multiboot.MultibootInfo) noreturn {
     assert(magic == multiboot.MULTIBOOT_BOOTLOADER_MAGIC);
