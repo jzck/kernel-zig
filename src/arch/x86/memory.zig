@@ -8,27 +8,31 @@ pub var stack_size: usize = undefined;
 pub var stack_end: usize = undefined;
 
 pub const PAGE_SIZE: usize = 4096;
-// 4095 -> 4096
-// 4096 -> 4096
-// 4097 -> 8192
-pub fn pageAlign(address: u32) u32 {
+pub inline fn pageAlign(address: u32) u32 {
+    // 4095 -> 4096
+    // 4096 -> 4096
+    // 4097 -> 8192
     return (address + PAGE_SIZE - 1) & (~PAGE_SIZE +% 1);
 }
 
 ////
 // Return the amount of variable elements (in bytes).
 //
-pub fn available() usize {
+pub inline fn available() usize {
     return stack_index * PAGE_SIZE;
+}
+
+pub inline fn available_MiB() usize {
+    return available() / (1024 * 1024);
 }
 
 ////
 // Request a free physical page and return its address.
 //
-pub fn allocate() ?usize {
+pub fn allocate() !usize {
     if (available() == 0) {
         println("out of memory");
-        return null;
+        return error.OutOfMemory;
     }
     stack_index -= 1;
     return stack[stack_index];
@@ -56,9 +60,14 @@ pub fn initialize(info: *const multiboot.MultibootInfo) void {
     assert((info.flags & multiboot.MULTIBOOT_INFO_MEMORY) != 0);
     assert((info.flags & multiboot.MULTIBOOT_INFO_MEM_MAP) != 0);
 
+    // TODO: WHAT WHY WHAAAAT, must check back here later
+    // Place stack at 0x200000 so that in the future I trigger a
+    // random bug and I won't ever know where it came from, great.
+    stack = @intToPtr([*]usize, 0x200000); // 2 MiB
+
     // Place the stack of free pages after the last Multiboot module.
-    stack = @intToPtr([*]usize, 0x200000);
     // stack = @intToPtr([*]usize, pageAlign(info.mods_addr));
+
     // Calculate the approximate size of the stack based on the amount of total upper memory.
     stack_size = ((info.mem_upper * 1024) / PAGE_SIZE) * @sizeOf(usize);
     stack_end = pageAlign(@ptrToInt(stack) + stack_size);
@@ -82,4 +91,8 @@ pub fn initialize(info: *const multiboot.MultibootInfo) void {
     }
 
     println("available memory: {d} MiB ", available() / 1024 / 1024);
+}
+
+pub fn introspect() void {
+    println("physframes left: {d} ({d} MiB)", stack_index, available_MiB());
 }

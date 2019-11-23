@@ -26,5 +26,7 @@ export fn kmain(magic: u32, info: *const multiboot.MultibootInfo) noreturn {
     pci.scan();
     console.initialize();
 
+    // const t = task.Task.new(@ptrToInt(topbar));
+
     while (true) asm volatile ("hlt");
 }

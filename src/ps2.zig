@@ -78,9 +78,13 @@ fn key_isrelease(scancode: u8) bool {
     return scancode & (1 << 7) != 0;
 }
 
+pub var keyboard_callback: fn (u8) void = undefined;
+
 pub fn keyboard_handler() void {
     const scancode = ps2_scancode();
+    if (scancode > KEYMAP_US.len) return;
     if (key_isrelease(scancode)) return; // don't process releases
     const shift = false; // don't know about modifiers yet
-    console.keypress(KEYMAP_US[scancode][if (shift) 1 else 0]);
+    const character = KEYMAP_US[scancode][if (shift) 1 else 0];
+    if (keyboard_callback != undefined) keyboard_callback(character);
 }

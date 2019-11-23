@@ -1,6 +1,15 @@
 //https://wiki.osdev.org/Memory_Map_(x86)
 
-pub const KSTACK = 0x80000; // todo: move to .bss
-pub const KERNEL = 0x100000;
-pub const IDENTITY = 0x400000; // 0->4MiB
-pub const HEAP = 0x800000;
+const kiB = 1024;
+const MiB = 1024 * kiB; // 0x100000
+const GiB = 1024 * MiB;
+
+// zig fmt: off
+pub const KSTACK            = 0x80000; // todo: move to .bss
+pub const KERNEL            = 1 * MiB;
+pub const IDENTITY          = 4 * MiB; // 0->4MiB
+
+pub const HEAP              = 8 * MiB;
+pub const USER_STACKS       = 0x1000000;
+pub const USER_STACKS_END   = 0x10000000;
+// zig fmt: on

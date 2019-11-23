@@ -2,7 +2,6 @@
 const time = @import("time.zig");
 const x86 = @import("arch/x86/index.zig");
 const std = @import("std");
-
 // Screen size.
 pub const VGA_WIDTH = 80;
 pub const VGA_HEIGHT = 25;
@@ -70,8 +69,7 @@ pub fn topbar() void {
     vga.cursor = 0;
     vga.background = Color.Red;
 
-    const offset_ms = time.offset_us / 1000;
-    println("{}.{}", time.offset_s, offset_ms / 10);
+    time.uptime();
 
     vga.cursor = cursor;
     vga.background = bg;
@@ -154,10 +152,12 @@ const VGA = struct {
     //
     fn scrollDown(self: *VGA) void {
         const first = VGA_WIDTH; // Index of first line.
+        const second = 2 * VGA_WIDTH; // Index of first line.
         const last = VGA_SIZE - VGA_WIDTH; // Index of last line.
 
         // Copy all the screen (apart from the first line) up one line.
-        std.mem.copy(VGAEntry, self.vram[0..last], self.vram[first..VGA_SIZE]);
+        // std.mem.copy(VGAEntry, self.vram[0..last], self.vram[first .. VGA_SIZE]); // whole screen
+        std.mem.copy(VGAEntry, self.vram[first..last], self.vram[second..VGA_SIZE]); // skip topbar
         // Clean the last line.
         std.mem.set(VGAEntry, self.vram[last..VGA_SIZE], self.entry(' '));
 

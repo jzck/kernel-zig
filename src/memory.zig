@@ -1,8 +1,7 @@
-const paging = @import("arch/x86/paging.zig");
+pub usingnamespace @import("index.zig");
 
-pub fn alloc(size: usize) usize {
-    
-}
+pub fn allocate(comptime T: type) !*type {}
 
-pub fn free() {
-}
+pub fn free(address: usize) void {}
+
+pub fn initialize() void {}

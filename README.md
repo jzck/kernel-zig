@@ -1,36 +1,33 @@
-## hobby kernel in zig
-
-slowly porting from rust.
+# hobby kernel in zig
 
 ### features
 
- - vga frame buffer
+ - 80x25 frame buffer
  - ps2 keyboard driver
- - interrupts
  - terminal console
  - lspci
+ - x86
+   - MMU
+   - interrupts
 
 ### dependencies
 
-`zig` compiler
+  - [ziglang](https://github.com/ziglang/zig) 0.5.0
 
-### compile
+# How to
 
-`zig build` compiles and links the multiboot kernel, without a bootloader.
+## compile
 
-### test
+`zig build` compiles and links the multiboot kernel (without a bootloader)
 
-`./qemu.sh start`  
-`./qemu.sh monitor`  
-`./qemu.sh gdb`  
+## test
+
+ - `./qemu.sh start`
+ - `./qemu.sh monitor`
+ - `./qemu.sh gdb`
 
 # Notes
 
-## interrupts
+## interrupt call chain
 
 `interrupt` -> `idt[n]` -> `isrN` -> `isrDispatch` -> `handlers[n]` (default `unhandled()`)
-
-## layout
-
-`0->4Mib` kernel reserved
-`1Mib` interrupt stack

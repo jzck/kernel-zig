@@ -10,5 +10,5 @@ pub fn increment(value: u32) void {
 
 pub fn uptime() void {
     const offset_ms = offset_us / 1000;
-    println("uptime: {}.{:.3}", offset_s, offset_ms);
+    println("{}.{:.3}", offset_s, offset_ms);
 }

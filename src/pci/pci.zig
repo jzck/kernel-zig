@@ -54,10 +54,12 @@ pub const PciDevice = struct {
             var drv = Drivers[i];
             if (self.class() != drv.class or self.subclass() != drv.subclass)
                 continue;
-            if (drv.vendor) |v| if (self.vendor != v)
-                continue;
-            if (drv.subsystem) |ss| if (self.subsystem() != ss)
-                continue;
+            if (drv.vendor) |v|
+                if (self.vendor != v)
+                    continue;
+            if (drv.subsystem) |ss|
+                if (self.subsystem() != ss)
+                    continue;
             return drv;
         }
         return null;
@@ -139,7 +141,7 @@ pub fn scan() void {
 
 pub fn lspci() void {
     var slot: u5 = 0;
-    println("b:s.f c,s      v      d      drv");
+    println("b:s.f c, s      v      d     drv");
     while (slot < 31) : (slot += 1) {
         if (PciDevice.init(0, slot, 0)) |dev| {
             var function: u3 = 0;

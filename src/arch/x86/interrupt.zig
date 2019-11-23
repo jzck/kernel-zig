@@ -175,11 +175,8 @@ pub fn maskIRQ(irq: u8, mask: bool) void {
 
     // Mask or unmask the interrupt.
     const shift = @intCast(u3, irq % 8);
-    if (mask) {
-        outb(port, old | (u8(1) << shift));
-    } else {
-        outb(port, old & ~(u8(1) << shift));
-    }
+    if (mask) outb(port, old | (u8(1) << shift));
+    if (!mask) outb(port, old & ~(u8(1) << shift));
     const new = inb(port); // Retrieve the current mask.
 }
 

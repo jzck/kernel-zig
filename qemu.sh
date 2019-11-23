@@ -18,7 +18,7 @@ start() {
         # -device virtio-net,netdev=network0 -netdev tap,id=network0,ifname=tap0,script=no,downscript=no \
 	# build/kernel.iso
 
-        # this allows this switch to monitor with ^a-c, but doesn't
+        # this allows to monitor with ^a-c, but doesn't
         # play nice with irqs apparently...
         # -serial mon:stdio \
 }

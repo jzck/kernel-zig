@@ -4,10 +4,13 @@ var command: [10]u8 = undefined;
 var command_len: usize = 0;
 
 fn execute(com: []u8) void {
-    if (@import("std").mem.eql(u8, com, "lspci")) pci.lspci();
-    if (@import("std").mem.eql(u8, com, "paging")) x86.paging.addrspace();
-    if (@import("std").mem.eql(u8, com, "uptime")) time.uptime();
-    if (@import("std").mem.eql(u8, com, "topbar")) topbar();
+    const eql = std.mem.eql;
+    if (eql(u8, com, "x86paging")) return x86.paging.introspect();
+    if (eql(u8, com, "x86memory")) return x86.memory.introspect();
+    if (eql(u8, com, "lspci")) return pci.lspci();
+    if (eql(u8, com, "uptime")) return time.uptime();
+    if (eql(u8, com, "topbar")) return topbar();
+    println("{}: command not found", com);
 }
 
 pub fn keypress(char: u8) void {
@@ -15,7 +18,7 @@ pub fn keypress(char: u8) void {
     switch (char) {
         '\n' => {
             print("\n");
-            execute(command[0..command_len]);
+            if (command_len > 0) execute(command[0..command_len]);
             print("> ");
             command_len = 0;
         },
@@ -38,6 +41,6 @@ pub fn keypress(char: u8) void {
 }
 
 pub fn initialize() void {
-    x86.interrupt.registerIRQ(1, ps2.keyboard_handler);
+    ps2.keyboard_callback = keypress;
     print("> ");
 }
