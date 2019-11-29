@@ -7,7 +7,6 @@ var stack_index: usize = 0; // Index into the stack.
 pub var stack_size: usize = undefined;
 pub var stack_end: usize = undefined;
 
-pub const PAGE_SIZE: usize = 4096;
 pub inline fn pageAlign(address: u32) u32 {
     // 4095 -> 4096
     // 4096 -> 4096
@@ -15,7 +14,6 @@ pub inline fn pageAlign(address: u32) u32 {
     return (address + PAGE_SIZE - 1) & (~PAGE_SIZE +% 1);
 }
 
-////
 // Return the amount of variable elements (in bytes).
 //
 pub inline fn available() usize {
@@ -26,19 +24,17 @@ pub inline fn available_MiB() usize {
     return available() / (1024 * 1024);
 }
 
-////
 // Request a free physical page and return its address.
 //
 pub fn allocate() !usize {
     if (available() == 0) {
-        println("out of memory");
+        kernel.println("out of memory");
         return error.OutOfMemory;
     }
     stack_index -= 1;
     return stack[stack_index];
 }
 
-////
 // Free a previously allocated physical page.
 //
 // Arguments:
@@ -49,16 +45,15 @@ pub fn free(address: usize) void {
     stack_index += 1;
 }
 
-////
 // Scan the memory map to index all available memory.
 //
 // Arguments:
 //     info: Information structure from bootloader.
 //
-pub fn initialize(info: *const multiboot.MultibootInfo) void {
+pub fn initialize(info: *const kernel.multiboot.MultibootInfo) void {
     // Ensure the bootloader has given us the memory map.
-    assert((info.flags & multiboot.MULTIBOOT_INFO_MEMORY) != 0);
-    assert((info.flags & multiboot.MULTIBOOT_INFO_MEM_MAP) != 0);
+    assert((info.flags & kernel.multiboot.MULTIBOOT_INFO_MEMORY) != 0);
+    assert((info.flags & kernel.multiboot.MULTIBOOT_INFO_MEM_MAP) != 0);
 
     // TODO: WHAT WHY WHAAAAT, must check back here later
     // Place stack at 0x200000 so that in the future I trigger a
@@ -74,7 +69,7 @@ pub fn initialize(info: *const multiboot.MultibootInfo) void {
 
     var map: usize = info.mmap_addr;
     while (map < info.mmap_addr + info.mmap_length) {
-        var entry = @intToPtr(*multiboot.MultibootMMapEntry, map);
+        var entry = @intToPtr(*kernel.multiboot.MultibootMMapEntry, map);
 
         // Calculate the start and end of this memory area.
         var start = @truncate(usize, entry.addr);
@@ -83,16 +78,16 @@ pub fn initialize(info: *const multiboot.MultibootInfo) void {
         start = if (start >= stack_end) start else stack_end;
 
         // Flag all the pages in this memory area as free.
-        if (entry.type == multiboot.MULTIBOOT_MEMORY_AVAILABLE) while (start < end) : (start += PAGE_SIZE)
+        if (entry.type == kernel.multiboot.MULTIBOOT_MEMORY_AVAILABLE) while (start < end) : (start += PAGE_SIZE)
             free(start);
 
         // Go to the next entry in the memory map.
         map += entry.size + @sizeOf(@typeOf(entry.size));
     }
 
-    println("available memory: {d} MiB ", available() / 1024 / 1024);
+    kernel.println("available memory: {d} MiB ", available() / 1024 / 1024);
 }
 
 pub fn introspect() void {
-    println("physframes left: {d} ({d} MiB)", stack_index, available_MiB());
+    kernel.println("physframes left: {d} ({d} MiB)", stack_index, available_MiB());
 }

@@ -11,6 +11,7 @@ pub fn build(b: *Builder) void {
     kernel.addAssemblyFile("src/arch/x86/gdt.s");
     kernel.addAssemblyFile("src/arch/x86/isr.s");
     kernel.addAssemblyFile("src/arch/x86/paging.s");
+    // kernel.addAssemblyFile("src/arch/x86/switch_tasks.s");
 
     kernel.setBuildMode(b.standardReleaseOptions());
     kernel.setTarget(builtin.Arch.i386, builtin.Os.freestanding, builtin.Abi.none);

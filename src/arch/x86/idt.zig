@@ -58,7 +58,7 @@ pub fn initialize() void {
     isr.install_irqs();
     isr.install_syscalls();
     interrupt.registerIRQ(0, interrupt.pit_handler);
-    interrupt.registerIRQ(1, ps2.keyboard_handler);
+    interrupt.registerIRQ(1, kernel.ps2.keyboard_handler);
 
     // load IDT
     lidt(@ptrToInt(&idtr));

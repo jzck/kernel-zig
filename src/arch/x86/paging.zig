@@ -1,10 +1,8 @@
 usingnamespace @import("index.zig");
-// usingnamespace @import("x86");
 
 extern fn setupPaging(phys_pd: usize) void;
 
 const PageEntry = usize;
-pub const PAGE_SIZE = 4096;
 pub const PT = @intToPtr([*]PageEntry, 0xFFC00000);
 pub const PD = @intToPtr([*]PageEntry, 0xFFFFF000);
 const PRESENT = 0x1;
@@ -18,18 +16,18 @@ const HUGE = 0x80;
 pub var pageDirectory: [1024]PageEntry align(4096) linksection(".bss") = [_]PageEntry{0} ** 1024;
 
 fn pageFault() void {
-    println("pagefault");
+    kernel.println("pagefault");
     while (true) asm volatile ("hlt");
 }
 
-inline fn pageBase(addr: usize) usize {
+inline fn pageBase(virt: usize) usize {
     return addr & (~PAGE_SIZE +% 1);
 }
-inline fn pde(addr: usize) *PageEntry {
-    return &PD[addr >> 22];
+inline fn pde(virt: usize) *PageEntry {
+    return &PD[virt >> 22]; //relies on recursive mapping
 }
-inline fn pte(addr: usize) *PageEntry {
-    return &PT[addr >> 12];
+inline fn pte(virt: usize) *PageEntry {
+    return &PT[virt >> 12]; //relies on recursive mapping
 }
 
 // virtual to physical
@@ -40,17 +38,18 @@ pub fn translate(virt: usize) ?usize {
 
 pub fn unmap(virt: usize) void {
     if (translate(virt)) |phys| {
-        memory.free(translate(virt));
+        mem.free(phys);
     } else {
-        println("can't unmap 0x{x}, map is empty.", addr);
+        kernel.println("can't unmap 0x{x} because it is not mapped.", virt);
     }
 }
 
 pub fn mmap(virt: usize, phys: ?usize) !void {
-    var pde: *PageEntry = pde(virt);
-    if (pde.* == 0) pde.* = try memory.allocate() | WRITE | PRESENT;
-    var pte: *PageEntry = pte(virt);
-    pte.* = if (phys) |p| p else allocate() | PRESENT;
+    //TODO: support hugepages
+    // allocate a page directory if there is none
+    if (pde(virt).* == 0) pde(virt).* = (try pmem.allocate()) | WRITE | PRESENT;
+    // allocate a frame if phys isn't specified
+    pte(virt).* = (if (phys) |p| p else try pmem.allocate()) | PRESENT;
 }
 
 pub fn initialize() void {
@@ -61,7 +60,8 @@ pub fn initialize() void {
     // recursive mapping
     p2[1023] = @ptrToInt(&p2[0]) | PRESENT | WRITE;
 
-    assert(memory.stack_end < layout.IDENTITY);
+    // TODO: verify is this a hack?
+    assert(pmem.stack_end < kernel.layout.IDENTITY);
 
     interrupt.register(14, pageFault);
     setupPaging(@ptrToInt(&pageDirectory[0]));
@@ -72,12 +72,12 @@ pub fn introspect() void {
     i = 0;
     while (i < 1024) : (i += 1) {
         if (PD[i] == 0) continue;
-        println("p2[{}] -> 0x{x}", i, PD[i]);
+        kernel.println("p2[{}] -> 0x{x}", i, PD[i]);
         if (PD[i] & HUGE != 0) continue;
         var j: usize = 0;
         while (j < 1024) : (j += 1) {
             var entry: PageEntry = PT[i * 1024 + j];
-            if (entry != 0) println("p2[{}]p1[{}] -> 0x{x}", i, j, entry);
+            if (entry != 0) kernel.println("p2[{}]p1[{}] -> 0x{x}", i, j, entry);
         }
     }
 }

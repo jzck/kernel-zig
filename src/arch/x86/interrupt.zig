@@ -35,11 +35,11 @@ var handlers = [_]fn () void{unhandled} ** 48;
 
 fn unhandled() noreturn {
     const n = isr.context.interrupt_n;
-    print("unhandled interrupt number {d}", n);
+    kernel.print("unhandled interrupt number {d}", n);
     if (n < IRQ_0) {
-        println(" (exception)");
+        kernel.println(" (exception)");
     } else {
-        println(" (IRQ number {d})", n - IRQ_0);
+        kernel.println(" (IRQ number {d})", n - IRQ_0);
     }
     hang();
 }
@@ -196,5 +196,5 @@ pub fn pit_handler() void {
     // pit freq = 1.193182 MHz
     // chan0 divisor = 2685
     // PIT_RATE in us
-    time.increment(2251);
+    kernel.time.increment(2251);
 }

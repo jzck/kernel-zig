@@ -1,12 +1,11 @@
 // usingnamespace @import("kernel");
 usingnamespace @import("index.zig");
-// const multiboot = @import("../../multiboot.zig");
 
 /// x86 specific intialization
-pub fn x86_main(info: *const multiboot.MultibootInfo) void {
+pub fn x86_main(info: *const kernel.multiboot.MultibootInfo) void {
     gdt.initialize();
     idt.initialize();
-    memory.initialize(info);
+    pmem.initialize(info);
     paging.initialize();
 
     // enable interrupts

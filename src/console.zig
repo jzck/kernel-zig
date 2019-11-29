@@ -6,7 +6,7 @@ var command_len: usize = 0;
 fn execute(com: []u8) void {
     const eql = std.mem.eql;
     if (eql(u8, com, "x86paging")) return x86.paging.introspect();
-    if (eql(u8, com, "x86memory")) return x86.memory.introspect();
+    if (eql(u8, com, "x86memory")) return x86.pmem.introspect();
     if (eql(u8, com, "lspci")) return pci.lspci();
     if (eql(u8, com, "uptime")) return time.uptime();
     if (eql(u8, com, "topbar")) return topbar();

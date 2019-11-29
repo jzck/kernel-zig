@@ -1,18 +1,16 @@
 // std
-pub const assert = @import("std").debug.assert;
+pub const std = @import("std");
+pub const assert = std.debug.assert;
 
 // from core kernel
-pub usingnamespace @import("../../vga.zig");
-pub const multiboot = @import("../../multiboot.zig");
-pub const time = @import("../../time.zig");
-pub const ps2 = @import("../../ps2.zig");
+pub const kernel = @import("../../index.zig");
 
 // x86 namespace
 pub usingnamespace @import("lib/io.zig");
 pub usingnamespace @import("lib/instructions.zig");
 pub usingnamespace @import("main.zig");
-pub const layout = @import("layout.zig");
-pub const memory = @import("memory.zig");
+pub usingnamespace @import("constants.zig");
+pub const pmem = @import("pmem.zig");
 pub const paging = @import("paging.zig");
 pub const idt = @import("idt.zig");
 pub const isr = @import("isr.zig");
