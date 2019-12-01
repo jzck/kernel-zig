@@ -10,7 +10,7 @@ pub var vga = VGA{
     .vram = @intToPtr([*]VGAEntry, 0xb8000)[0..0x4000],
     .cursor = 80 * 2,
     .foreground = Color.Black,
-    .background = Color.Brown,
+    .background = Color.Green,
 };
 
 // Color codes.

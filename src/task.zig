@@ -1,41 +1,51 @@
 pub usingnamespace @import("index.zig");
-// var tasks = Array(?*Task).init(&mem.allocator);
+const TASK_MAX = 1024;
+var tasks = [1]?*Task{null} ** TASK_MAX;
 
 const STACK_SIZE = x86.PAGE_SIZE; // Size of thread stacks.
+var tid_counter: u16 = 1;
 
 pub const Task = struct {
-    // context: isr.Context,
-
-    ////
-    // Create a new thread inside the current process.
-    // NOTE: Do not call this function directly. Use Process.createThread instead.
-    //
-    // Arguments:
-    //     entry_point: The entry point of the new thread.
-    //
-    // Returns:
-    //     Pointer to the new thread structure.
-    //
     tid: u16,
+    stack_top: usize,
+    entrypoint: usize,
+    // context: isr.Context,
+    //cr3: usize,
 
-    pub fn stack(tid: u16) usize {
-        const stack = layout.USER_STACKS + (2 * (tid - 1) * STACK_SIZE);
-        assert(stack < layout.USER_STACKS_END);
-        return stack;
+    pub fn new(entrypoint: usize) !*Task {
+        // Allocate and initialize the thread structure.
+        var t = try vmem.allocate(Task);
+
+        t.entrypoint = entrypoint;
+        t.tid = tid_counter;
+        tid_counter +%= 1;
+        assert(tid_counter != 0); //overflow
+
+        t.stack_top = try vmem.malloc(STACK_SIZE);
+        assert(t.stack_top < layout.USER_STACKS_END);
+
+        tasks[t.tid] = t;
+        return t;
     }
 
-    pub fn new(entry_point: usize) !*Task {
-        // assert(scheduler.current_process == process);
-
-        // map the stack
-
-        // Allocate and initialize the thread structure.
-        var this = try vmem.allocate(Task);
-        this.tid = 4;
-
-        return this;
+    pub fn destroy(self: *Task) void {
+        tasks[self.tid] = null;
+        vmem.free(self.stack_top);
+        vmem.free(@ptrToInt(self));
     }
 };
+
+pub fn initialize() !void {
+    const t = try Task.new(0x0);
+    println("task=0x{x}", t.stack_top);
+}
+
+pub fn introspect() void {
+    for (tasks) |t| {
+        if (t == null) continue;
+        println("{}", t);
+    }
+}
 
 // fn initContext(entry_point: usize, stack: usize) isr.Context {
 //     // Insert a trap return address to destroy the thread on return.

@@ -3,14 +3,15 @@ usingnamespace @import("index.zig");
 var command: [10]u8 = undefined;
 var command_len: usize = 0;
 
-fn execute(com: []u8) void {
+fn execute(input: []u8) void {
     const eql = std.mem.eql;
-    if (eql(u8, com, "x86paging")) return x86.paging.introspect();
-    if (eql(u8, com, "x86memory")) return x86.pmem.introspect();
-    if (eql(u8, com, "lspci")) return pci.lspci();
-    if (eql(u8, com, "uptime")) return time.uptime();
-    if (eql(u8, com, "topbar")) return topbar();
-    println("{}: command not found", com);
+    if (eql(u8, input, "x86paging")) return x86.paging.introspect();
+    if (eql(u8, input, "x86memory")) return x86.pmem.introspect();
+    if (eql(u8, input, "tasks")) return task.introspect();
+    if (eql(u8, input, "lspci")) return pci.lspci();
+    if (eql(u8, input, "uptime")) return time.uptime();
+    if (eql(u8, input, "topbar")) return topbar();
+    println("{}: command not found", input);
 }
 
 pub fn keypress(char: u8) void {

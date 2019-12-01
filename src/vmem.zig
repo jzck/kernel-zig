@@ -14,13 +14,17 @@ pub fn available() usize {
     return stack_index * x86.PAGE_SIZE;
 }
 
-pub fn allocate(comptime T: type) !*T {
-    assert(@sizeOf(T) < x86.PAGE_SIZE); // this allocator only support 1:1 mapping
+pub fn malloc(size: usize) !usize {
     if (available() == 0) return error.OutOfMemory;
     stack_index -= 1;
     var vaddr: usize = stack[stack_index];
     try x86.paging.mmap(vaddr, null);
-    return @intToPtr(*T, vaddr);
+    return vaddr;
+}
+
+pub fn allocate(comptime T: type) !*T {
+    assert(@sizeOf(T) < x86.PAGE_SIZE); // this allocator only support 1:1 mapping
+    return @intToPtr(*T, try malloc(@sizeOf(T)));
 }
 
 pub fn free(address: usize) void {

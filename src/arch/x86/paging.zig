@@ -20,13 +20,14 @@ fn pageFault() void {
     while (true) asm volatile ("hlt");
 }
 
-inline fn pageBase(virt: usize) usize {
-    return addr & (~PAGE_SIZE +% 1);
+// TODO: inline these
+fn pageBase(virt: usize) usize {
+    return virt & (~PAGE_SIZE +% 1);
 }
-inline fn pde(virt: usize) *PageEntry {
+fn pde(virt: usize) *PageEntry {
     return &PD[virt >> 22]; //relies on recursive mapping
 }
-inline fn pte(virt: usize) *PageEntry {
+fn pte(virt: usize) *PageEntry {
     return &PT[virt >> 12]; //relies on recursive mapping
 }
 
@@ -38,7 +39,7 @@ pub fn translate(virt: usize) ?usize {
 
 pub fn unmap(virt: usize) void {
     if (translate(virt)) |phys| {
-        mem.free(phys);
+        pmem.free(phys);
     } else {
         kernel.println("can't unmap 0x{x} because it is not mapped.", virt);
     }
@@ -64,7 +65,7 @@ pub fn initialize() void {
     assert(pmem.stack_end < kernel.layout.IDENTITY);
 
     interrupt.register(14, pageFault);
-    setupPaging(@ptrToInt(&pageDirectory[0]));
+    setupPaging(@ptrToInt(&pageDirectory[0])); //asm routine
 }
 
 pub fn introspect() void {

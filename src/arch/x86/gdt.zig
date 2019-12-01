@@ -107,22 +107,11 @@ pub fn setKernelStack(esp0: usize) void {
     tss.esp0 = esp0;
 }
 
-////
-// Load the GDT into the system registers (defined in assembly).
-//
-// Arguments:
-//     gdtr: Pointer to the GDTR.
-//
 extern fn loadGDT(gdtr: *const GDTRegister) void;
 
-////
-// Initialize the Global Descriptor Table.
-//
 pub fn initialize() void {
-    // tty.step("Setting up the Global Descriptor Table");
-
     // Initialize GDT.
-    loadGDT(&gdtr);
+    loadGDT(&gdtr); //asm routine
 
     // Initialize TSS.
     // const tss_entry = makeEntry(@ptrToInt(&tss), @sizeOf(TSS) - 1, TSS_ACCESS, PROTECTED);

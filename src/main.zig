@@ -24,17 +24,9 @@ export fn kmain(magic: u32, info: *const multiboot.MultibootInfo) noreturn {
     println("--- x86 initialization ---");
     x86.x86_main(info);
     println("--- core initialization ---");
-    pci.scan();
+    // pci.scan();
     vmem.initialize();
-
-    // var a = vmem.allocate(u32) catch unreachable;
-    // println("a={}", &a);
-    // const b = vmem.allocate(VGAEntry) catch unreachable;
-    // println("b={x}", &b);
-
-    const t = task.Task.new(@ptrToInt(topbar)) catch unreachable;
-    println("task={x}", &t);
-
+    task.initialize() catch unreachable;
     console.initialize();
 
     while (true) asm volatile ("hlt");
