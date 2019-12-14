@@ -1,14 +1,12 @@
 usingnamespace @import("index.zig");
 
+// shitty ring buffer, fight me.
+var input_ring_buffer: [1024]u8 = [_]u8{0} ** 1024;
+var input_read_index: u10 = 0;
+var input_write_index: u10 = 0;
+
 var command: [10]u8 = undefined;
 var command_len: usize = 0;
-
-fn test_a() void {
-    var a: u32 = 2;
-    a += 1;
-    a = 4;
-    a -= 1;
-}
 
 fn execute(input: []u8) void {
     const eql = std.mem.eql;
@@ -18,10 +16,6 @@ fn execute(input: []u8) void {
     if (eql(u8, input, "lspci")) return pci.lspci();
     if (eql(u8, input, "uptime")) return time.uptime();
     if (eql(u8, input, "topbar")) return topbar();
-    if (eql(u8, input, "test")) {
-        const tbar = task.Task.new(@ptrToInt(topbar)) catch unreachable;
-        while (true) tbar.switch_to();
-    }
     println("{}: command not found", input);
 }
 
@@ -52,7 +46,19 @@ pub fn keypress(char: u8) void {
     }
 }
 
-pub fn initialize() void {
-    ps2.keyboard_callback = keypress;
+pub fn buffer_write(char: u8) void {
+    input_ring_buffer[input_write_index] = char;
+    input_write_index +%= 1;
+}
+
+pub fn loop() void {
+    ps2.keyboard_callback = buffer_write;
     print("> ");
+    while (true) {
+        if (input_write_index - input_read_index > 0) {
+            keypress(input_ring_buffer[input_read_index]);
+            input_read_index +%= 1;
+        }
+        task.schedule();
+    }
 }

@@ -1,8 +1,14 @@
 pub usingnamespace @import("index.zig");
-const TASK_MAX = 1024;
+
 var boot_task = Task{ .tid = 0, .esp = 0x47 };
-var current_task: *Task = &boot_task;
-pub var tasks = [1]?*Task{&boot_task} ++ ([1]?*Task{null} ** TASK_MAX);
+const ListOfTasks = std.TailQueue(*Task);
+var first_task = ListOfTasks.Node.init(&boot_task);
+var current_task = &first_task;
+var tasks = ListOfTasks{
+    .first = &first_task,
+    .last = &first_task,
+    .len = 1,
+};
 
 const STACK_SIZE = x86.PAGE_SIZE; // Size of thread stacks.
 var tid_counter: u16 = 1;
@@ -16,9 +22,9 @@ pub const Task = packed struct {
     //context: isr.Context,
     //cr3: usize,
 
-    pub fn new(entrypoint: usize) !*Task {
+    pub fn create(entrypoint: usize) !*Task {
         // Allocate and initialize the thread structure.
-        var t = try vmem.allocate(Task);
+        var t = try vmem.create(Task);
 
         t.tid = tid_counter;
         tid_counter +%= 1;
@@ -33,46 +39,62 @@ pub const Task = packed struct {
         t.esp -= 4;
         @intToPtr(*usize, t.esp).* = t.esp + 8;
 
-        println("new task esp=0x{x}, eip=0x{x}", t.esp, entrypoint);
-
-        tasks[t.tid] = t;
         return t;
     }
 
     pub fn destroy(self: *Task) void {
-        tasks[self.tid] = null;
         vmem.free(self.esp);
         vmem.free(@ptrToInt(self));
     }
-
-    pub fn switch_to(self: *Task) void {
-        assert(self != current_task);
-        // save old stack
-        const old_task_esp_addr = &current_task.esp;
-        current_task = self;
-        // x86.cli();
-        // don't inline the asm function, it needs to ret
-        @noInlineCall(switch_tasks, self.esp, @ptrToInt(old_task_esp_addr));
-        // comptime {
-        //     asm (
-        //         \\mov +8(%esp), %eax
-        //         \\mov %esp, (%eax)
-        //         \\mov +4(%esp), %eax
-        //         \\mov %eax, %esp
-        //         \\pop %ebp
-        //         \\ret
-        //     );
-        // }
-        // x86.sti();
-        println("after switch");
-    }
 };
 
+pub fn new(entrypoint: usize) !void {
+    // println("currently: {}", current_task.data.tid);
+    // println("first: {}", tasks.first.?.data.tid);
+    // println("last: {}", tasks.last.?.data.tid);
+    const node = try vmem.create(ListOfTasks.Node);
+    node.data = try Task.create(entrypoint);
+    tasks.append(node);
+    // println("currently: {}", current_task.data.tid);
+    // println("first: {}", tasks.first.?.data.tid);
+    // println("last: {}", tasks.last.?.data.tid);
+}
+
+pub fn switch_to(new_task: *ListOfTasks.Node) void {
+    assert(new_task.data != current_task.data);
+    // save old stack
+    const old_task_esp_addr = &current_task.data.esp;
+    current_task = new_task;
+    // x86.cli();
+    // don't inline the asm function, it needs to ret
+    @noInlineCall(switch_tasks, new_task.data.esp, @ptrToInt(old_task_esp_addr));
+    // x86.sti();
+}
+
+pub fn schedule() void {
+    // println("currently: {}", current_task.data.tid);
+    // println("first: {}", tasks.first.?.data.tid);
+    // println("last: {}", tasks.last.?.data.tid);
+    if (current_task.next) |next| {
+        // println("switching to {}", next.data.tid);
+        switch_to(next);
+    } else if (tasks.first) |head| {
+        // println("switching to {}", head.data.tid);
+        if (head.data != current_task.data) switch_to(head);
+    } else {
+        introspect();
+    }
+    // if (current_task.data.tid == 0) switch_to(tasks.last.?.*);
+    // if (current_task.data.tid == 1) switch_to(tasks.first.?.*);
+    // if (current_task.tid == 2) tasks[0].?.switch_to();
+}
+
 pub fn introspect() void {
-    for (tasks) |t| {
-        if (t == null) continue;
-        if (t != current_task) println("{}", t);
-        if (t == current_task) println("*{}", t);
+    var it = tasks.first;
+    println("{} tasks", tasks.len);
+    while (it) |node| : (it = node.next) {
+        if (node.data != current_task.data) println("{}", node.data);
+        if (node.data == current_task.data) println("*{}", node.data);
     }
 }
 

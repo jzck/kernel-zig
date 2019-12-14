@@ -22,7 +22,7 @@ pub fn malloc(size: usize) !usize {
     return vaddr;
 }
 
-pub fn allocate(comptime T: type) !*T {
+pub fn create(comptime T: type) !*T {
     assert(@sizeOf(T) < x86.PAGE_SIZE); // this allocator only support 1:1 mapping
     return @intToPtr(*T, try malloc(@sizeOf(T)));
 }

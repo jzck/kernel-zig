@@ -25,8 +25,10 @@ export fn kmain(magic: u32, info: *const multiboot.MultibootInfo) noreturn {
     vmem.initialize();
     pci.scan();
 
-    console.initialize();
-    // while (true) asm volatile ("hlt");
-    const tbar = task.Task.new(@ptrToInt(topbar)) catch unreachable;
-    while (true) tbar.switch_to();
+    task.new(@ptrToInt(topbar)) catch unreachable;
+    // task.new(@ptrToInt(console.loop)) catch unreachable;
+
+    // task.schedule();
+    console.loop();
+    while (true) asm volatile ("hlt");
 }

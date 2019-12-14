@@ -63,9 +63,9 @@ pub fn clear() void {
     vga.clear();
 }
 pub fn topbar() void {
-    const cursor = vga.cursor;
     const bg = vga.background;
     while (true) {
+        const cursor = vga.cursor;
         vga.cursor = 0;
         vga.background = Color.Red;
 
@@ -73,7 +73,7 @@ pub fn topbar() void {
 
         vga.cursor = cursor;
         vga.background = bg;
-        task.tasks[0].?.switch_to();
+        task.schedule();
     }
 }
 
