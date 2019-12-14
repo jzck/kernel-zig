@@ -3,6 +3,13 @@ usingnamespace @import("index.zig");
 var command: [10]u8 = undefined;
 var command_len: usize = 0;
 
+fn test_a() void {
+    var a: u32 = 2;
+    a += 1;
+    a = 4;
+    a -= 1;
+}
+
 fn execute(input: []u8) void {
     const eql = std.mem.eql;
     if (eql(u8, input, "x86paging")) return x86.paging.introspect();
@@ -11,6 +18,10 @@ fn execute(input: []u8) void {
     if (eql(u8, input, "lspci")) return pci.lspci();
     if (eql(u8, input, "uptime")) return time.uptime();
     if (eql(u8, input, "topbar")) return topbar();
+    if (eql(u8, input, "test")) {
+        const tbar = task.Task.new(@ptrToInt(topbar)) catch unreachable;
+        while (true) tbar.switch_to();
+    }
     println("{}: command not found", input);
 }
 

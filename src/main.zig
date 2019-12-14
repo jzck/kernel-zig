@@ -15,8 +15,6 @@ export const multiboot_header align(4) linksection(".multiboot") = multiboot: {
     };
 };
 
-extern fn switch_tasks(stack: u32) void;
-
 // arch independant initialization
 export fn kmain(magic: u32, info: *const multiboot.MultibootInfo) noreturn {
     assert(magic == multiboot.MULTIBOOT_BOOTLOADER_MAGIC);
@@ -24,10 +22,11 @@ export fn kmain(magic: u32, info: *const multiboot.MultibootInfo) noreturn {
     println("--- x86 initialization ---");
     x86.x86_main(info);
     println("--- core initialization ---");
-    // pci.scan();
     vmem.initialize();
-    task.initialize() catch unreachable;
-    console.initialize();
+    pci.scan();
 
-    while (true) asm volatile ("hlt");
+    console.initialize();
+    // while (true) asm volatile ("hlt");
+    const tbar = task.Task.new(@ptrToInt(topbar)) catch unreachable;
+    while (true) tbar.switch_to();
 }

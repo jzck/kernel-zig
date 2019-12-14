@@ -7,7 +7,6 @@ pub fn x86_main(info: *const kernel.multiboot.MultibootInfo) void {
     idt.initialize();
     pmem.initialize(info);
     paging.initialize();
-
     // enable interrupts
     sti();
 }

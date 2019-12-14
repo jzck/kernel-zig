@@ -16,7 +16,7 @@ pub inline fn pageAlign(address: u32) u32 {
 
 // Return the amount of variable elements (in bytes).
 //
-pub inline fn available() usize {
+pub fn available() usize {
     return stack_index * PAGE_SIZE;
 }
 

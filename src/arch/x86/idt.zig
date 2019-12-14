@@ -59,7 +59,12 @@ pub fn initialize() void {
     isr.install_syscalls();
     interrupt.registerIRQ(0, interrupt.pit_handler);
     interrupt.registerIRQ(1, kernel.ps2.keyboard_handler);
+    interrupt.register(3, test_b);
 
     // load IDT
     lidt(@ptrToInt(&idtr));
+}
+
+pub fn test_b() void {
+    kernel.println("int3!");
 }

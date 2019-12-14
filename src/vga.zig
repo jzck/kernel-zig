@@ -1,7 +1,7 @@
-// usingnamespace @import("index.zig");
-const time = @import("time.zig");
-const x86 = @import("arch/x86/index.zig");
-const std = @import("std");
+usingnamespace @import("index.zig");
+// const time = @import("time.zig");
+// const x86 = @import("arch/x86/index.zig");
+// const std = @import("std");
 // Screen size.
 pub const VGA_WIDTH = 80;
 pub const VGA_HEIGHT = 25;
@@ -56,9 +56,8 @@ const Errors = error{};
 pub fn print(comptime format: []const u8, args: ...) void {
     var a = std.fmt.format({}, Errors, printCallback, format, args);
 }
-
 pub fn println(comptime format: []const u8, args: ...) void {
-    var a = std.fmt.format({}, Errors, printCallback, format ++ "\n", args);
+    var a = print(format ++ "\n", args);
 }
 pub fn clear() void {
     vga.clear();
@@ -66,13 +65,16 @@ pub fn clear() void {
 pub fn topbar() void {
     const cursor = vga.cursor;
     const bg = vga.background;
-    vga.cursor = 0;
-    vga.background = Color.Red;
+    while (true) {
+        vga.cursor = 0;
+        vga.background = Color.Red;
 
-    time.uptime();
+        time.uptime();
 
-    vga.cursor = cursor;
-    vga.background = bg;
+        vga.cursor = cursor;
+        vga.background = bg;
+        task.tasks[0].?.switch_to();
+    }
 }
 
 fn printCallback(context: void, string: []const u8) Errors!void {
