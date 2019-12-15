@@ -28,5 +28,8 @@ export fn kmain(magic: u32, info: *const multiboot.MultibootInfo) noreturn {
     task.new(@ptrToInt(topbar)) catch unreachable;
     task.new(@ptrToInt(console.loop)) catch unreachable;
 
-    while (true) task.schedule();
+    while (true) {
+        task.lock_scheduler();
+        task.schedule();
+    }
 }

@@ -8,6 +8,7 @@ pub usingnamespace @import("vga.zig");
 pub const x86 = @import("arch/x86/index.zig");
 
 ///core
+pub const constants = @import("constants.zig");
 pub const layout = @import("layout.zig");
 pub const multiboot = @import("multiboot.zig");
 pub const vmem = @import("vmem.zig");

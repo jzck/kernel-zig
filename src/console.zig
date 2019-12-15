@@ -58,6 +58,7 @@ pub fn loop() void {
             keypress(input_ring_buffer[input_read_index]);
             input_read_index +%= 1;
         }
+        task.lock_scheduler();
         task.schedule();
     }
 }

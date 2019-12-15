@@ -6,10 +6,10 @@ pub const assert = std.debug.assert;
 pub const kernel = @import("../../index.zig");
 
 // x86 namespace
+pub const PAGE_SIZE: usize = 4096;
 pub usingnamespace @import("lib/io.zig");
 pub usingnamespace @import("lib/instructions.zig");
 pub usingnamespace @import("main.zig");
-pub usingnamespace @import("constants.zig");
 pub const pmem = @import("pmem.zig");
 pub const paging = @import("paging.zig");
 pub const idt = @import("idt.zig");

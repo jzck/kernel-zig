@@ -49,10 +49,10 @@ pub const Task = struct {
 
         // allocate a new stack
         t.esp = (try vmem.malloc(STACK_SIZE)) + STACK_SIZE;
-        // top of stack is the address that ret will pop
+        // this will be what ret goes to
         t.esp -= 4;
         @intToPtr(*usize, t.esp).* = entrypoint;
-        // top of stack is ebp that we will pop
+        // this will be popped into ebp
         t.esp -= 4;
         @intToPtr(*usize, t.esp).* = t.esp + 8;
 
@@ -74,17 +74,18 @@ pub fn new(entrypoint: usize) !void {
 pub fn switch_to(new_task: *ListOfTasks.Node) void {
     assert(new_task.data != current_task.data);
 
+    // save old stack
+    const old_task_esp_addr = &current_task.data.esp;
+
     // switch states
     current_task.data.state = .ReadyToRun;
     new_task.data.state = .Running;
-
-    // save old stack
-    const old_task_esp_addr = &current_task.data.esp;
     current_task = new_task;
-    // x86.cli();
+
+    unlock_scheduler();
+
     // don't inline the asm function, it needs to ret
     @noInlineCall(switch_tasks, new_task.data.esp, @ptrToInt(old_task_esp_addr));
-    // x86.sti();
 }
 
 // circular next
@@ -104,6 +105,25 @@ pub fn first_ready_to_run() ?*ListOfTasks.Node {
 pub fn schedule() void {
     update_time_used();
     if (first_ready_to_run()) |t| switch_to(t);
+}
+
+var IRQ_disable_counter: usize = 0;
+
+pub fn lock_scheduler() void {
+    if (constants.SMP == false) {
+        x86.cli();
+        IRQ_disable_counter += 1;
+    }
+}
+pub fn unlock_scheduler() void {
+    if (IRQ_disable_counter == 0) {
+        println("trying to unlock here");
+        while (true) asm volatile ("hlt");
+    }
+    if (constants.SMP == false) {
+        IRQ_disable_counter -= 1;
+        if (IRQ_disable_counter == 0) x86.sti();
+    }
 }
 
 pub fn introspect() void {

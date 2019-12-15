@@ -75,6 +75,8 @@ pub fn topbar() void {
         vga.cursor_enabled = true;
         vga.cursor = cursor;
         vga.background = bg;
+
+        task.lock_scheduler();
         task.schedule();
     }
 }
