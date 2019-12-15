@@ -68,7 +68,7 @@ pub fn initialize() void {
     setupPaging(@ptrToInt(&pageDirectory[0])); //asm routine
 }
 
-pub fn introspect() void {
+pub fn format() void {
     var i: usize = 1;
     i = 0;
     while (i < 1024) : (i += 1) {

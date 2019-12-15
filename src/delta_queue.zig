@@ -28,7 +28,7 @@ pub fn DeltaQueue(comptime T: type) type {
             ///
             /// Arguments:
             ///     new_node: Pointer to the new node to insert.
-            pub fn insertAfter(node: *Node, new_node: *Node) void {
+            fn insertAfter(node: *Node, new_node: *Node) void {
                 if (node.next) |after| {
                     std.debug.assert(new_node.counter <= after.counter); //sanity check
                     after.counter -= new_node.counter;
@@ -38,6 +38,7 @@ pub fn DeltaQueue(comptime T: type) type {
             }
         };
 
+        len: usize = 0,
         first: ?*Node,
 
         /// Initialize a delta queue.
@@ -56,6 +57,8 @@ pub fn DeltaQueue(comptime T: type) type {
         ///     node: Pointer to a node in the list.
         ///     new_node: Pointer to the new node to insert.
         pub fn insert(list: *Self, node: *Node) void {
+            list.len += 1;
+
             var target: ?*Node = null;
             var next: ?*Node = list.first;
             while (true) {
@@ -108,6 +111,7 @@ pub fn DeltaQueue(comptime T: type) type {
             const first = list.first orelse return null;
             if (first.counter != 0) return null;
             list.first = first.next;
+            list.len -= 1;
             return first;
         }
 

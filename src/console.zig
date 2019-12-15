@@ -10,9 +10,11 @@ var command_len: usize = 0;
 
 fn execute(input: []u8) void {
     const eql = std.mem.eql;
-    if (eql(u8, input, "x86paging")) return x86.paging.introspect();
-    if (eql(u8, input, "x86memory")) return x86.pmem.introspect();
-    if (eql(u8, input, "tasks")) return task.introspect();
+    if (eql(u8, input, "clear")) return vga.clear();
+    if (eql(u8, input, "x86paging")) return x86.paging.format();
+    if (eql(u8, input, "x86memory")) return x86.pmem.format();
+    if (eql(u8, input, "tasks")) return task.format();
+    if (eql(u8, input, "tasks")) return task.format_short();
     if (eql(u8, input, "lspci")) return pci.lspci();
     if (eql(u8, input, "uptime")) return time.uptime();
     println("{}: command not found", input);

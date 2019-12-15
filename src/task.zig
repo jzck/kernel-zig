@@ -73,6 +73,7 @@ pub fn new(entrypoint: usize) !void {
     ready_tasks.prepend(node);
 }
 
+// TODO: make a sleep without malloc
 pub fn usleep(usec: u64) !void {
     const node = try vmem.create(SleepNode);
     lock_scheduler();
@@ -163,7 +164,11 @@ pub fn unlock_scheduler() void {
     }
 }
 
-pub fn introspect() void {
+pub fn format_short() void {
+    print("{}R {}B {}S", ready_tasks.len, blocked_tasks.len, sleeping_tasks.len);
+}
+
+pub fn format() void {
     update_time_used();
 
     println("{}", current_task.data);

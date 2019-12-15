@@ -42,9 +42,12 @@ pub const PciDevice = struct {
     pub fn format(self: PciDevice) void {
         print("{}:{}.{}", self.bus, self.slot, self.function);
         print(" {x},{x:2}", self.class(), self.subclass());
-        print(" 0x{x},0x{x}", self.vendor, self.device());
-        if (self.driver()) |d|
+        print(" 0x{x} 0x{x}", self.vendor, self.device());
+        if (self.driver()) |d| {
             print(" {}", d.name);
+        } else {
+            print(" (none)");
+        }
         println("");
     }
 
@@ -141,7 +144,7 @@ pub fn scan() void {
 
 pub fn lspci() void {
     var slot: u5 = 0;
-    println("b:s.f c, s      v      d     drv");
+    println("b:s.f c, s vendor device driver");
     while (slot < 31) : (slot += 1) {
         if (PciDevice.init(0, slot, 0)) |dev| {
             var function: u3 = 0;

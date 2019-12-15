@@ -9,7 +9,7 @@ start() {
 		-gdb tcp::${QEMU_GDB_PORT} \
 		-monitor unix:${QEMU_SOCKET},server,nowait \
 		-enable-kvm \
-		-m 1337M \
+		-m 1341M \
 		-curses \
 		-kernel ${KERNEL}
 		# -drive file=disk.img,if=virtio\

@@ -88,6 +88,6 @@ pub fn initialize(info: *const kernel.multiboot.MultibootInfo) void {
     kernel.println("available memory: {d} MiB ", available() / 1024 / 1024);
 }
 
-pub fn introspect() void {
+pub fn format() void {
     kernel.println("physframes left: {d} ({d} MiB)", stack_index, available_MiB());
 }

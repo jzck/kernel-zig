@@ -65,20 +65,21 @@ pub fn clear() void {
 pub fn topbar() void {
     const bg = vga.background;
     while (true) {
-        if (time.offset_us / 1000000 == 4) task.usleep(2 * 1000 * 1000) catch unreachable;
         const cursor = vga.cursor;
-        vga.cursor = 0;
         vga.background = Color.Red;
+        vga.cursor = 0;
         vga.cursor_enabled = false;
 
         time.uptime();
+        print(" | ");
+        task.format_short();
+        println("");
 
         vga.cursor_enabled = true;
         vga.cursor = cursor;
         vga.background = bg;
 
-        task.lock_scheduler();
-        task.schedule();
+        task.usleep(60 * 1000) catch unreachable; // 60ms
     }
 }
 
