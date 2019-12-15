@@ -1,5 +1,6 @@
 pub usingnamespace @import("index.zig");
 
+var timer_last_count: u64 = 0;
 var boot_task = Task{ .tid = 0, .esp = 0x47 };
 const ListOfTasks = std.TailQueue(*Task);
 var first_task = ListOfTasks.Node.init(&boot_task);
@@ -16,9 +17,17 @@ var tid_counter: u16 = 1;
 ///ASM
 extern fn switch_tasks(new_esp: u32, old_esp_addr: u32) void;
 
+pub fn update_time_used() void {
+    const current_count = time.offset_us;
+    const elapsed = current_count - timer_last_count;
+    timer_last_count = current_count;
+    current_task.data.time_used += elapsed;
+}
+
 pub const Task = packed struct {
     esp: usize,
     tid: u16,
+    time_used: u64 = 0,
     //context: isr.Context,
     //cr3: usize,
 
@@ -26,6 +35,7 @@ pub const Task = packed struct {
         // Allocate and initialize the thread structure.
         var t = try vmem.create(Task);
 
+        t.time_used = 0;
         t.tid = tid_counter;
         tid_counter +%= 1;
         assert(tid_counter != 0); //overflow
@@ -49,15 +59,9 @@ pub const Task = packed struct {
 };
 
 pub fn new(entrypoint: usize) !void {
-    // println("currently: {}", current_task.data.tid);
-    // println("first: {}", tasks.first.?.data.tid);
-    // println("last: {}", tasks.last.?.data.tid);
     const node = try vmem.create(ListOfTasks.Node);
     node.data = try Task.create(entrypoint);
     tasks.append(node);
-    // println("currently: {}", current_task.data.tid);
-    // println("first: {}", tasks.first.?.data.tid);
-    // println("last: {}", tasks.last.?.data.tid);
 }
 
 pub fn switch_to(new_task: *ListOfTasks.Node) void {
@@ -72,26 +76,18 @@ pub fn switch_to(new_task: *ListOfTasks.Node) void {
 }
 
 pub fn schedule() void {
-    // println("currently: {}", current_task.data.tid);
-    // println("first: {}", tasks.first.?.data.tid);
-    // println("last: {}", tasks.last.?.data.tid);
+    update_time_used();
     if (current_task.next) |next| {
-        // println("switching to {}", next.data.tid);
         switch_to(next);
     } else if (tasks.first) |head| {
-        // println("switching to {}", head.data.tid);
         if (head.data != current_task.data) switch_to(head);
-    } else {
-        introspect();
     }
-    // if (current_task.data.tid == 0) switch_to(tasks.last.?.*);
-    // if (current_task.data.tid == 1) switch_to(tasks.first.?.*);
-    // if (current_task.tid == 2) tasks[0].?.switch_to();
 }
 
 pub fn introspect() void {
     var it = tasks.first;
     println("{} tasks", tasks.len);
+    update_time_used();
     while (it) |node| : (it = node.next) {
         if (node.data != current_task.data) println("{}", node.data);
         if (node.data == current_task.data) println("*{}", node.data);

@@ -15,7 +15,6 @@ fn execute(input: []u8) void {
     if (eql(u8, input, "tasks")) return task.introspect();
     if (eql(u8, input, "lspci")) return pci.lspci();
     if (eql(u8, input, "uptime")) return time.uptime();
-    if (eql(u8, input, "topbar")) return topbar();
     println("{}: command not found", input);
 }
 

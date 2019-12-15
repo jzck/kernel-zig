@@ -68,9 +68,11 @@ pub fn topbar() void {
         const cursor = vga.cursor;
         vga.cursor = 0;
         vga.background = Color.Red;
+        vga.cursor_enabled = false;
 
         time.uptime();
 
+        vga.cursor_enabled = true;
         vga.cursor = cursor;
         vga.background = bg;
         task.schedule();
@@ -85,6 +87,7 @@ fn printCallback(context: void, string: []const u8) Errors!void {
 const VGA = struct {
     vram: []VGAEntry,
     cursor: usize,
+    cursor_enabled: bool = true,
     foreground: Color,
     background: Color,
 
@@ -132,7 +135,7 @@ const VGA = struct {
                 self.cursor += 1;
             },
         }
-        self.updateCursor();
+        if (self.cursor_enabled) self.updateCursor();
     }
 
     ////
@@ -142,11 +145,8 @@ const VGA = struct {
     //     string: String to be printed.
     //
     pub fn writeString(self: *VGA, string: []const u8) void {
-        for (string) |char| {
-            self.writeChar(char);
-        }
-
-        self.updateCursor();
+        for (string) |char| self.writeChar(char);
+        if (self.cursor_enabled) self.updateCursor();
     }
 
     ////
