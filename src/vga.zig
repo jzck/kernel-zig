@@ -65,8 +65,7 @@ pub fn clear() void {
 pub fn topbar() void {
     const bg = vga.background;
     while (true) {
-        if (time.offset_us / 1000000 == 4) task.block(.Paused);
-
+        if (time.offset_us / 1000000 == 4) task.usleep(2 * 1000 * 1000) catch unreachable;
         const cursor = vga.cursor;
         vga.cursor = 0;
         vga.background = Color.Red;

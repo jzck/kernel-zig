@@ -1,7 +1,8 @@
 /// std
+pub const builtin = @import("builtin");
 pub const std = @import("std");
 pub const assert = std.debug.assert;
-
+pub usingnamespace @import("delta_queue.zig");
 pub usingnamespace @import("vga.zig");
 
 ///arch
@@ -18,4 +19,4 @@ pub const time = @import("time.zig");
 ///extra
 pub const console = @import("console.zig");
 pub const pci = @import("pci/pci.zig");
-pub const ps2 = @import("ps2.zig"); // i don't know whether this is x86 specific or not
+pub const ps2 = @import("ps2.zig");

@@ -31,6 +31,11 @@ export fn kmain(magic: u32, info: *const multiboot.MultibootInfo) noreturn {
     while (true) {
         task.lock_scheduler();
         task.schedule();
-        if (time.offset_us / 1000000 == 6) task.unblock(task.blocked_tasks.first.?);
     }
+}
+
+pub fn panic(a: []const u8, b: ?*builtin.StackTrace) noreturn {
+    println("{}", a);
+    println("{}", b);
+    while (true) asm volatile ("hlt");
 }

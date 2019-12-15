@@ -2,10 +2,14 @@ pub usingnamespace @import("index.zig");
 
 var timer_last_count: u64 = 0;
 var boot_task = Task{ .tid = 0, .esp = 0x47, .state = .Running };
-const ListOfTasks = std.TailQueue(*Task);
-pub var current_task = &ListOfTasks.Node.init(&boot_task);
-pub var ready_tasks = ListOfTasks.init();
-pub var blocked_tasks = ListOfTasks.init();
+
+const TaskNode = std.TailQueue(*Task).Node;
+const SleepNode = DeltaQueue(*TaskNode).Node;
+
+pub var current_task: *TaskNode = &TaskNode.init(&boot_task);
+pub var ready_tasks = std.TailQueue(*Task).init();
+pub var blocked_tasks = std.TailQueue(*Task).init();
+pub var sleeping_tasks = DeltaQueue(*TaskNode).init();
 
 const STACK_SIZE = x86.PAGE_SIZE; // Size of thread stacks.
 var tid_counter: u16 = 1;
@@ -23,7 +27,8 @@ pub fn update_time_used() void {
 pub const TaskState = enum {
     Running,
     ReadyToRun,
-    Paused,
+    Blocked,
+    Sleeping,
 };
 
 pub const Task = struct {
@@ -63,24 +68,35 @@ pub const Task = struct {
 };
 
 pub fn new(entrypoint: usize) !void {
-    const node = try vmem.create(ListOfTasks.Node);
+    const node = try vmem.create(TaskNode);
     node.data = try Task.create(entrypoint);
     ready_tasks.prepend(node);
 }
 
-/// Block the current task
+pub fn usleep(usec: u64) !void {
+    const node = try vmem.create(SleepNode);
+    lock_scheduler();
+    current_task.data.state = .Sleeping;
+    node.data = current_task;
+    node.counter = usec;
+    sleeping_tasks.insert(node);
+    schedule();
+}
+
 pub fn block(state: TaskState) void {
     assert(state != .Running);
     assert(state != .ReadyToRun);
 
     lock_scheduler();
     current_task.data.state = state;
+    blocked_tasks.append(current_task);
     schedule();
 }
 
-pub fn unblock(node: *ListOfTasks.Node) void {
+pub fn unblock(node: *TaskNode) void {
     lock_scheduler();
     node.data.state = .ReadyToRun;
+    blocked_tasks.remove(node);
     if (ready_tasks.first == null) {
         // Only one task was running before, so pre-empt
         switch_to(node);
@@ -91,16 +107,22 @@ pub fn unblock(node: *ListOfTasks.Node) void {
     }
 }
 
-pub fn switch_to(chosen: *ListOfTasks.Node) void {
+// expects:
+//  - chosen is .ReadyToRun
+//  - chosen is not in any scheduler lists
+pub fn switch_to(chosen: *TaskNode) void {
+    assert(chosen.data.state == .ReadyToRun);
+
+    // in case of self preemption
+    if (current_task.data.state == .Running) {
+        current_task.data.state = .ReadyToRun;
+        ready_tasks.append(current_task);
+    }
+
     // save old stack
     const old_task_esp_addr = &current_task.data.esp;
 
-    ready_tasks.remove(chosen);
     // switch states
-    switch (current_task.data.state) {
-        .Running => ready_tasks.append(current_task),
-        else => blocked_tasks.append(current_task),
-    }
     chosen.data.state = .Running;
     current_task = chosen;
 
@@ -111,16 +133,23 @@ pub fn switch_to(chosen: *ListOfTasks.Node) void {
 }
 
 pub fn schedule() void {
+    assert(IRQ_disable_counter > 0);
+
     update_time_used();
-    if (ready_tasks.first) |t| {
-        switch_to(t);
-    } else {
-        unlock_scheduler();
-    }
+
+    // check if somebody wants to run
+    const chosen = ready_tasks.popFirst();
+    if (chosen == null) return unlock_scheduler();
+
+    // std doesn't do this, for developer flexibility maybe?
+    chosen.?.prev = null;
+    chosen.?.next = null;
+
+    // switch
+    switch_to(chosen.?);
 }
 
 var IRQ_disable_counter: usize = 0;
-
 pub fn lock_scheduler() void {
     if (constants.SMP == false) {
         x86.cli();
@@ -138,26 +167,13 @@ pub fn introspect() void {
     update_time_used();
 
     println("{}", current_task.data);
+
     var it = ready_tasks.first;
     while (it) |node| : (it = node.next) println("{}", node.data);
+
     it = blocked_tasks.first;
     while (it) |node| : (it = node.next) println("{}", node.data);
+
+    var sit = sleeping_tasks.first;
+    while (sit) |node| : (sit = node.next) println("{} {}", node.data.data, node.counter);
 }
-
-// fn initContext(entry_point: usize, stack: usize) isr.Context {
-//     // Insert a trap return address to destroy the thread on return.
-//     var stack_top = @intToPtr(*usize, stack + STACK_SIZE - @sizeOf(usize));
-//     stack_top.* = layout.THREAD_DESTROY;
-
-//     return isr.Context{
-//         .cs = gdt.USER_CODE | gdt.USER_RPL,
-//         .ss = gdt.USER_DATA | gdt.USER_RPL,
-//         .eip = entry_point,
-//         .esp = @ptrToInt(stack_top),
-//         .eflags = 0x202,
-
-//         .registers = isr.Registers.init(),
-//         .interrupt_n = 0,
-//         .error_code = 0,
-//     };
-// }

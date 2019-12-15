@@ -197,4 +197,11 @@ pub fn pit_handler() void {
     // chan0 divisor = 2685
     // PIT_RATE in us
     kernel.time.increment(2251);
+    kernel.task.sleeping_tasks.decrement(2251);
+    while (kernel.task.sleeping_tasks.popZero()) |sleepnode| {
+        const tasknode = sleepnode.data;
+        tasknode.data.state = .ReadyToRun;
+        kernel.vmem.free(@ptrToInt(sleepnode));
+        kernel.task.ready_tasks.prepend(tasknode);
+    }
 }
