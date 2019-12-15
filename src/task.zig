@@ -1,7 +1,7 @@
 pub usingnamespace @import("index.zig");
 
 var timer_last_count: u64 = 0;
-var boot_task = Task{ .tid = 0, .esp = 0x47 };
+var boot_task = Task{ .tid = 0, .esp = 0x47, .state = .Running };
 const ListOfTasks = std.TailQueue(*Task);
 var first_task = ListOfTasks.Node.init(&boot_task);
 var current_task = &first_task;
@@ -24,10 +24,16 @@ pub fn update_time_used() void {
     current_task.data.time_used += elapsed;
 }
 
-pub const Task = packed struct {
+pub const TaskState = enum {
+    Running,
+    ReadyToRun,
+};
+
+pub const Task = struct {
     esp: usize,
     tid: u16,
     time_used: u64 = 0,
+    state: TaskState,
     //context: isr.Context,
     //cr3: usize,
 
@@ -36,6 +42,7 @@ pub const Task = packed struct {
         var t = try vmem.create(Task);
 
         t.time_used = 0;
+        t.state = .ReadyToRun;
         t.tid = tid_counter;
         tid_counter +%= 1;
         assert(tid_counter != 0); //overflow
@@ -66,6 +73,11 @@ pub fn new(entrypoint: usize) !void {
 
 pub fn switch_to(new_task: *ListOfTasks.Node) void {
     assert(new_task.data != current_task.data);
+
+    // switch states
+    current_task.data.state = .ReadyToRun;
+    new_task.data.state = .Running;
+
     // save old stack
     const old_task_esp_addr = &current_task.data.esp;
     current_task = new_task;
@@ -75,23 +87,31 @@ pub fn switch_to(new_task: *ListOfTasks.Node) void {
     // x86.sti();
 }
 
+// circular next
+pub fn next(node: *ListOfTasks.Node) ?*ListOfTasks.Node {
+    return if (node.next) |n| n else tasks.first;
+}
+
+pub fn first_ready_to_run() ?*ListOfTasks.Node {
+    var node = current_task;
+    while (next(node)) |n| {
+        if (n.data.state == .ReadyToRun) return n;
+        if (n.data.state == .Running) return null;
+    }
+    return null;
+}
+
 pub fn schedule() void {
     update_time_used();
-    if (current_task.next) |next| {
-        switch_to(next);
-    } else if (tasks.first) |head| {
-        if (head.data != current_task.data) switch_to(head);
-    }
+    if (first_ready_to_run()) |t| switch_to(t);
 }
 
 pub fn introspect() void {
+    update_time_used();
+
     var it = tasks.first;
     println("{} tasks", tasks.len);
-    update_time_used();
-    while (it) |node| : (it = node.next) {
-        if (node.data != current_task.data) println("{}", node.data);
-        if (node.data == current_task.data) println("*{}", node.data);
-    }
+    while (it) |node| : (it = node.next) println("{}", node.data);
 }
 
 // fn initContext(entry_point: usize, stack: usize) isr.Context {
