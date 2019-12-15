@@ -3,13 +3,9 @@ pub usingnamespace @import("index.zig");
 var timer_last_count: u64 = 0;
 var boot_task = Task{ .tid = 0, .esp = 0x47, .state = .Running };
 const ListOfTasks = std.TailQueue(*Task);
-var first_task = ListOfTasks.Node.init(&boot_task);
-var current_task = &first_task;
-var tasks = ListOfTasks{
-    .first = &first_task,
-    .last = &first_task,
-    .len = 1,
-};
+pub var current_task = &ListOfTasks.Node.init(&boot_task);
+pub var ready_tasks = ListOfTasks.init();
+pub var blocked_tasks = ListOfTasks.init();
 
 const STACK_SIZE = x86.PAGE_SIZE; // Size of thread stacks.
 var tid_counter: u16 = 1;
@@ -27,6 +23,7 @@ pub fn update_time_used() void {
 pub const TaskState = enum {
     Running,
     ReadyToRun,
+    Paused,
 };
 
 pub const Task = struct {
@@ -68,43 +65,58 @@ pub const Task = struct {
 pub fn new(entrypoint: usize) !void {
     const node = try vmem.create(ListOfTasks.Node);
     node.data = try Task.create(entrypoint);
-    tasks.append(node);
+    ready_tasks.prepend(node);
 }
 
-pub fn switch_to(new_task: *ListOfTasks.Node) void {
-    assert(new_task.data != current_task.data);
+/// Block the current task
+pub fn block(state: TaskState) void {
+    assert(state != .Running);
+    assert(state != .ReadyToRun);
 
+    lock_scheduler();
+    current_task.data.state = state;
+    schedule();
+}
+
+pub fn unblock(node: *ListOfTasks.Node) void {
+    lock_scheduler();
+    node.data.state = .ReadyToRun;
+    if (ready_tasks.first == null) {
+        // Only one task was running before, so pre-empt
+        switch_to(node);
+    } else {
+        // There's at least one task on the "ready to run" queue already, so don't pre-empt
+        ready_tasks.append(node);
+        unlock_scheduler();
+    }
+}
+
+pub fn switch_to(chosen: *ListOfTasks.Node) void {
     // save old stack
     const old_task_esp_addr = &current_task.data.esp;
 
+    ready_tasks.remove(chosen);
     // switch states
-    current_task.data.state = .ReadyToRun;
-    new_task.data.state = .Running;
-    current_task = new_task;
+    switch (current_task.data.state) {
+        .Running => ready_tasks.append(current_task),
+        else => blocked_tasks.append(current_task),
+    }
+    chosen.data.state = .Running;
+    current_task = chosen;
 
     unlock_scheduler();
 
     // don't inline the asm function, it needs to ret
-    @noInlineCall(switch_tasks, new_task.data.esp, @ptrToInt(old_task_esp_addr));
-}
-
-// circular next
-pub fn next(node: *ListOfTasks.Node) ?*ListOfTasks.Node {
-    return if (node.next) |n| n else tasks.first;
-}
-
-pub fn first_ready_to_run() ?*ListOfTasks.Node {
-    var node = current_task;
-    while (next(node)) |n| {
-        if (n.data.state == .ReadyToRun) return n;
-        if (n.data.state == .Running) return null;
-    }
-    return null;
+    @noInlineCall(switch_tasks, chosen.data.esp, @ptrToInt(old_task_esp_addr));
 }
 
 pub fn schedule() void {
     update_time_used();
-    if (first_ready_to_run()) |t| switch_to(t);
+    if (ready_tasks.first) |t| {
+        switch_to(t);
+    } else {
+        unlock_scheduler();
+    }
 }
 
 var IRQ_disable_counter: usize = 0;
@@ -116,10 +128,6 @@ pub fn lock_scheduler() void {
     }
 }
 pub fn unlock_scheduler() void {
-    if (IRQ_disable_counter == 0) {
-        println("trying to unlock here");
-        while (true) asm volatile ("hlt");
-    }
     if (constants.SMP == false) {
         IRQ_disable_counter -= 1;
         if (IRQ_disable_counter == 0) x86.sti();
@@ -129,8 +137,10 @@ pub fn unlock_scheduler() void {
 pub fn introspect() void {
     update_time_used();
 
-    var it = tasks.first;
-    println("{} tasks", tasks.len);
+    println("{}", current_task.data);
+    var it = ready_tasks.first;
+    while (it) |node| : (it = node.next) println("{}", node.data);
+    it = blocked_tasks.first;
     while (it) |node| : (it = node.next) println("{}", node.data);
 }
 
