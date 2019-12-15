@@ -19,6 +19,9 @@ pub fn cli() void {
 pub fn sti() void {
     asm volatile ("sti");
 }
+pub inline fn hlt() void {
+    asm volatile ("hlt");
+}
 
 pub inline fn int3() void {
     asm volatile ("int3");

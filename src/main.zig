@@ -26,12 +26,14 @@ export fn kmain(magic: u32, info: *const multiboot.MultibootInfo) noreturn {
     pci.scan();
 
     task.new(@ptrToInt(topbar)) catch unreachable;
-    task.new(@ptrToInt(console.loop)) catch unreachable;
+    // task.new(@ptrToInt(console.loop)) catch unreachable;
 
-    while (true) {
-        task.lock_scheduler();
-        task.schedule();
-    }
+    console.loop();
+    unreachable;
+    // while (true) {
+    //     task.lock_scheduler();
+    //     task.schedule();
+    // }
 }
 
 pub fn panic(a: []const u8, b: ?*builtin.StackTrace) noreturn {

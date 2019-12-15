@@ -1,6 +1,5 @@
 pub usingnamespace @import("index.zig");
 
-var timer_last_count: u64 = 0;
 var boot_task = Task{ .tid = 0, .esp = 0x47, .state = .Running };
 
 const TaskNode = std.TailQueue(*Task).Node;
@@ -17,6 +16,7 @@ var tid_counter: u16 = 1;
 ///ASM
 extern fn switch_tasks(new_esp: u32, old_esp_addr: u32) void;
 
+var timer_last_count: u64 = 0;
 pub fn update_time_used() void {
     const current_count = time.offset_us;
     const elapsed = current_count - timer_last_count;
@@ -114,7 +114,7 @@ pub fn unblock(node: *TaskNode) void {
 pub fn switch_to(chosen: *TaskNode) void {
     assert(chosen.data.state == .ReadyToRun);
 
-    // in case of self preemption
+    // in case of self preemption, shouldn't happen really
     if (current_task.data.state == .Running) {
         current_task.data.state = .ReadyToRun;
         ready_tasks.append(current_task);
@@ -133,21 +133,66 @@ pub fn switch_to(chosen: *TaskNode) void {
     @noInlineCall(switch_tasks, chosen.data.esp, @ptrToInt(old_task_esp_addr));
 }
 
+fn notify_idle() void {
+    const bg = vga.background;
+    const fg = vga.foreground;
+    const cursor = vga.cursor;
+    vga.background = fg;
+    vga.foreground = bg;
+    vga.cursor = 80 - 4;
+    vga.cursor_enabled = false;
+
+    print("IDLE");
+
+    vga.cursor_enabled = true;
+    vga.cursor = cursor;
+    vga.background = bg;
+    vga.foreground = fg;
+}
+
+pub var CPU_idle_time: u64 = 0;
+pub var CPU_idle_start_time: u64 = 0;
 pub fn schedule() void {
     assert(IRQ_disable_counter > 0);
 
     update_time_used();
 
-    // check if somebody wants to run
-    const chosen = ready_tasks.popFirst();
-    if (chosen == null) return unlock_scheduler();
+    if (ready_tasks.popFirst()) |t| {
+        // somebody is ready to run
+        // std doesn't do this, for developer flexibility maybe?
+        t.prev = null;
+        t.next = null;
+        switch_to(t);
+    } else if (current_task.data.state == .Running) {
+        // single task mode, carry on
+        return unlock_scheduler();
+    } else {
+        // idle mode
+        notify_idle();
 
-    // std doesn't do this, for developer flexibility maybe?
-    chosen.?.prev = null;
-    chosen.?.next = null;
+        // borrow the current task
+        const borrow = current_task;
 
-    // switch
-    switch_to(chosen.?);
+        CPU_idle_start_time = time.offset_us; //for power management
+
+        while (true) { // idle loop
+            if (ready_tasks.popFirst()) |t| { // found a new task
+                CPU_idle_time += time.offset_us - CPU_idle_start_time; // count time as idle
+                timer_last_count = time.offset_us; // don't count time as used
+                println("went into idle mode for {}usecs", time.offset_us - CPU_idle_start_time);
+
+                if (t == borrow) {
+                    t.data.state = .Running;
+                    return unlock_scheduler(); //no need to ctx_switch we are already running this
+                }
+                return switch_to(t);
+            } else { // no tasks ready, let the timer fire
+                x86.sti(); // enable interrupts to allow the timer to fire
+                x86.hlt(); // halt and wait for the timer to fire
+                x86.cli(); // disable interrupts again to see if there is something to do
+            }
+        }
+    }
 }
 
 var IRQ_disable_counter: usize = 0;
@@ -158,6 +203,7 @@ pub fn lock_scheduler() void {
     }
 }
 pub fn unlock_scheduler() void {
+    if (IRQ_disable_counter == 0) println("error trying to unlock");
     if (constants.SMP == false) {
         IRQ_disable_counter -= 1;
         if (IRQ_disable_counter == 0) x86.sti();

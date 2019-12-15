@@ -8,6 +8,10 @@ var input_write_index: u10 = 0;
 var command: [10]u8 = undefined;
 var command_len: usize = 0;
 
+fn sleep_for_2() void {
+    task.usleep(2 * 1000 * 1000) catch unreachable;
+}
+
 fn execute(input: []u8) void {
     const eql = std.mem.eql;
     if (eql(u8, input, "clear")) return vga.clear();
@@ -16,6 +20,7 @@ fn execute(input: []u8) void {
     if (eql(u8, input, "tasks")) return task.format();
     if (eql(u8, input, "tasks")) return task.format_short();
     if (eql(u8, input, "lspci")) return pci.lspci();
+    if (eql(u8, input, "sleep2")) return sleep_for_2();
     if (eql(u8, input, "uptime")) return time.uptime();
     println("{}: command not found", input);
 }

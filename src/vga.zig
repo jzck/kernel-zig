@@ -79,7 +79,7 @@ pub fn topbar() void {
         vga.cursor = cursor;
         vga.background = bg;
 
-        task.usleep(60 * 1000) catch unreachable; // 60ms
+        task.usleep(500 * 1000) catch unreachable; // 60ms
     }
 }
 
