@@ -1,6 +1,6 @@
 pub usingnamespace @import("index.zig");
 
-var boot_task = Task{ .tid = 0, .esp = 0x47, .state = .Running };
+var boot_task = Task{ .tid = 0, .esp = 0x47, .state = .Running, .born = true };
 
 const TaskNode = std.TailQueue(*Task).Node;
 const SleepNode = DeltaQueue(*TaskNode).Node;
@@ -12,9 +12,6 @@ pub var sleeping_tasks = DeltaQueue(*TaskNode).init();
 
 const STACK_SIZE = x86.PAGE_SIZE; // Size of thread stacks.
 var tid_counter: u16 = 1;
-
-///ASM
-extern fn switch_tasks(new_esp: u32, old_esp_addr: u32) void;
 
 var timer_last_count: u64 = 0;
 pub fn update_time_used() void {
@@ -35,6 +32,7 @@ pub const Task = struct {
     esp: usize,
     tid: u16,
     time_used: u64 = 0,
+    born: bool = false,
     state: TaskState,
     //context: isr.Context,
     //cr3: usize,
@@ -61,11 +59,28 @@ pub const Task = struct {
         return t;
     }
 
+    // responsible for calling the task entrypoint
     pub fn destroy(self: *Task) void {
         vmem.free(self.esp);
         vmem.free(@ptrToInt(self));
     }
 };
+
+///ASM
+// extern fn jmp_to_entrypoint(entrypoint: usize) void;
+// // this is only run once on the first execution of a task
+// pub fn birth() void {
+//     println("birth!");
+//     unlock_scheduler();
+//     const entrypoint = current_task.data.entrypoint;
+//     jmp_to_entrypoint(entrypoint);
+//     // comptime asm ("jmp %[entrypoint]"
+//     //     :
+//     //     : [entrypoint] "{ecx}" (entrypoint)
+//     // );
+// }
+///ASM
+extern fn switch_tasks(new_esp: usize, old_esp_addr: usize) void;
 
 pub fn new(entrypoint: usize) !void {
     const node = try vmem.create(TaskNode);
@@ -76,12 +91,14 @@ pub fn new(entrypoint: usize) !void {
 // TODO: make a sleep without malloc
 pub fn usleep(usec: u64) !void {
     const node = try vmem.create(SleepNode);
+
     lock_scheduler();
     current_task.data.state = .Sleeping;
     node.data = current_task;
     node.counter = usec;
     sleeping_tasks.insert(node);
     schedule();
+    unlock_scheduler();
 }
 
 pub fn block(state: TaskState) void {
@@ -92,6 +109,7 @@ pub fn block(state: TaskState) void {
     current_task.data.state = state;
     blocked_tasks.append(current_task);
     schedule();
+    unlock_scheduler();
 }
 
 pub fn unblock(node: *TaskNode) void {
@@ -108,9 +126,29 @@ pub fn unblock(node: *TaskNode) void {
     }
 }
 
+var IRQ_disable_counter: usize = 0;
+pub fn lock_scheduler() void {
+    if (constants.SMP == false) {
+        x86.cli();
+        IRQ_disable_counter += 1;
+    }
+}
+pub fn unlock_scheduler() void {
+    if (IRQ_disable_counter == 0) println("error trying to unlock");
+    if (constants.SMP == false) {
+        IRQ_disable_counter -= 1;
+        if (IRQ_disable_counter == 0) {
+            x86.sti();
+            x86.hlt();
+        }
+    }
+}
+
 // expects:
 //  - chosen is .ReadyToRun
 //  - chosen is not in any scheduler lists
+//  - scheduler is locked
+//  - the tasks being switched to will unlock_scheduler()
 pub fn switch_to(chosen: *TaskNode) void {
     assert(chosen.data.state == .ReadyToRun);
 
@@ -127,10 +165,59 @@ pub fn switch_to(chosen: *TaskNode) void {
     chosen.data.state = .Running;
     current_task = chosen;
 
-    unlock_scheduler();
+    if (current_task.data.born == false) {
+        current_task.data.born = true;
+        unlock_scheduler();
+    }
 
     // don't inline the asm function, it needs to ret
     @noInlineCall(switch_tasks, chosen.data.esp, @ptrToInt(old_task_esp_addr));
+}
+
+pub var CPU_idle_time: u64 = 0;
+pub var CPU_idle_start_time: u64 = 0;
+pub fn schedule() void {
+    assert(IRQ_disable_counter > 0);
+
+    update_time_used();
+
+    // format();
+    if (ready_tasks.popFirst()) |t| {
+        // somebody is ready to run
+        // std doesn't do this, for developer flexibility maybe?
+        t.prev = null;
+        t.next = null;
+        switch_to(t);
+    } else if (current_task.data.state == .Running) {
+        // single task mode, carry on
+        return;
+    } else {
+        // idle mode
+        notify_idle();
+
+        // borrow the current task
+        const borrow = current_task;
+
+        CPU_idle_start_time = time.offset_us; //for power management
+
+        while (true) { // idle loop
+            if (ready_tasks.popFirst()) |t| { // found a new task
+                CPU_idle_time += time.offset_us - CPU_idle_start_time; // count time as idle
+                timer_last_count = time.offset_us; // don't count time as used
+                println("went into idle mode for {}usecs", time.offset_us - CPU_idle_start_time);
+
+                if (t == borrow) {
+                    t.data.state = .Running;
+                    return; //no need to ctx_switch we are already running this
+                }
+                return switch_to(t);
+            } else { // no tasks ready, let the timer fire
+                x86.sti(); // enable interrupts to allow the timer to fire
+                x86.hlt(); // halt and wait for the timer to fire
+                x86.cli(); // disable interrupts again to see if there is something to do
+            }
+        }
+    }
 }
 
 fn notify_idle() void {
@@ -150,66 +237,6 @@ fn notify_idle() void {
     vga.foreground = fg;
 }
 
-pub var CPU_idle_time: u64 = 0;
-pub var CPU_idle_start_time: u64 = 0;
-pub fn schedule() void {
-    assert(IRQ_disable_counter > 0);
-
-    update_time_used();
-
-    if (ready_tasks.popFirst()) |t| {
-        // somebody is ready to run
-        // std doesn't do this, for developer flexibility maybe?
-        t.prev = null;
-        t.next = null;
-        switch_to(t);
-    } else if (current_task.data.state == .Running) {
-        // single task mode, carry on
-        return unlock_scheduler();
-    } else {
-        // idle mode
-        notify_idle();
-
-        // borrow the current task
-        const borrow = current_task;
-
-        CPU_idle_start_time = time.offset_us; //for power management
-
-        while (true) { // idle loop
-            if (ready_tasks.popFirst()) |t| { // found a new task
-                CPU_idle_time += time.offset_us - CPU_idle_start_time; // count time as idle
-                timer_last_count = time.offset_us; // don't count time as used
-                println("went into idle mode for {}usecs", time.offset_us - CPU_idle_start_time);
-
-                if (t == borrow) {
-                    t.data.state = .Running;
-                    return unlock_scheduler(); //no need to ctx_switch we are already running this
-                }
-                return switch_to(t);
-            } else { // no tasks ready, let the timer fire
-                x86.sti(); // enable interrupts to allow the timer to fire
-                x86.hlt(); // halt and wait for the timer to fire
-                x86.cli(); // disable interrupts again to see if there is something to do
-            }
-        }
-    }
-}
-
-var IRQ_disable_counter: usize = 0;
-pub fn lock_scheduler() void {
-    if (constants.SMP == false) {
-        x86.cli();
-        IRQ_disable_counter += 1;
-    }
-}
-pub fn unlock_scheduler() void {
-    if (IRQ_disable_counter == 0) println("error trying to unlock");
-    if (constants.SMP == false) {
-        IRQ_disable_counter -= 1;
-        if (IRQ_disable_counter == 0) x86.sti();
-    }
-}
-
 pub fn format_short() void {
     print("{}R {}B {}S", ready_tasks.len, blocked_tasks.len, sleeping_tasks.len);
 }
@@ -221,10 +248,8 @@ pub fn format() void {
 
     var it = ready_tasks.first;
     while (it) |node| : (it = node.next) println("{}", node.data);
-
     it = blocked_tasks.first;
     while (it) |node| : (it = node.next) println("{}", node.data);
-
     var sit = sleeping_tasks.first;
     while (sit) |node| : (sit = node.next) println("{} {}", node.data.data, node.counter);
 }
