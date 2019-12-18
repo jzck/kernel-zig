@@ -127,15 +127,23 @@ pub fn unblock(node: *TaskNode) void {
 }
 
 var IRQ_disable_counter: usize = 0;
+var postpone_task_switches_counter: isize = 0; // this counter can go negative when we are scheduling after a postpone
+var postpone_task_switches_flag: bool = false;
 pub fn lock_scheduler() void {
     if (constants.SMP == false) {
         x86.cli();
         IRQ_disable_counter += 1;
+        postpone_task_switches_counter += 1;
     }
 }
 pub fn unlock_scheduler() void {
-    if (IRQ_disable_counter == 0) println("error trying to unlock");
     if (constants.SMP == false) {
+        postpone_task_switches_counter -= 1;
+        if (postpone_task_switches_flag == true and postpone_task_switches_counter == 0) {
+            // in this section, postpone counter will go to -1 during the task
+            postpone_task_switches_flag = false;
+            schedule();
+        }
         IRQ_disable_counter -= 1;
         if (IRQ_disable_counter == 0) {
             x86.sti();
@@ -151,6 +159,11 @@ pub fn unlock_scheduler() void {
 //  - the tasks being switched to will unlock_scheduler()
 pub fn switch_to(chosen: *TaskNode) void {
     assert(chosen.data.state == .ReadyToRun);
+
+    if (postpone_task_switches_counter != 0) {
+        postpone_task_switches_flag = true;
+        return;
+    }
 
     // in case of self preemption, shouldn't happen really
     if (current_task.data.state == .Running) {
@@ -179,6 +192,11 @@ pub var CPU_idle_start_time: u64 = 0;
 pub fn schedule() void {
     assert(IRQ_disable_counter > 0);
 
+    if (postpone_task_switches_counter != 0) {
+        postpone_task_switches_flag = true;
+        return;
+    }
+
     update_time_used();
 
     // format();
@@ -204,7 +222,7 @@ pub fn schedule() void {
             if (ready_tasks.popFirst()) |t| { // found a new task
                 CPU_idle_time += time.offset_us - CPU_idle_start_time; // count time as idle
                 timer_last_count = time.offset_us; // don't count time as used
-                println("went into idle mode for {}usecs", time.offset_us - CPU_idle_start_time);
+                // println("went into idle mode for {}usecs", time.offset_us - CPU_idle_start_time);
 
                 if (t == borrow) {
                     t.data.state = .Running;
