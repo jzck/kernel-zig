@@ -25,7 +25,8 @@ export fn kmain(magic: u32, info: *const multiboot.MultibootInfo) noreturn {
     vmem.initialize();
     pci.scan();
 
-    task.new(@ptrToInt(topbar)) catch unreachable;
+    task.cleaner_task = task.new(@ptrToInt(task.cleaner_loop)) catch unreachable;
+    _ = task.new(@ptrToInt(topbar)) catch unreachable;
     task.preempt();
 
     console.loop();

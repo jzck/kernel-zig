@@ -82,6 +82,6 @@ fn page_fault() void {
     kernel.println("phy: 0x{x}", paging.translate(vaddr));
     kernel.println("pde: 0x{x} ({})", paging.pde(vaddr), vaddr >> 22);
     kernel.println("pte: 0x{x} ({})", paging.pte(vaddr), vaddr >> 12);
-    paging.format();
+    // paging.format();
     while (true) asm volatile ("hlt");
 }

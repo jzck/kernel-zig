@@ -1,17 +1,19 @@
 pub usingnamespace @import("index.zig");
 
 var boot_task = Task{ .tid = 0, .esp = 0x47, .state = .Running, .born = true };
+var tid_counter: u16 = 1;
 
-const TaskNode = std.TailQueue(*Task).Node;
-const SleepNode = DeltaQueue(*TaskNode).Node;
+pub const TaskNode = std.TailQueue(*Task).Node;
+pub const SleepNode = DeltaQueue(*TaskNode).Node;
 
 pub var current_task: *TaskNode = &TaskNode.init(&boot_task);
+pub var cleaner_task: *TaskNode = undefined;
 pub var ready_tasks = std.TailQueue(*Task).init();
 pub var blocked_tasks = std.TailQueue(*Task).init();
+pub var terminated_tasks = std.TailQueue(*Task).init();
 pub var sleeping_tasks = DeltaQueue(*TaskNode).init();
 
 const STACK_SIZE = x86.PAGE_SIZE; // Size of thread stacks.
-var tid_counter: u16 = 1;
 
 var timer_last_count: u64 = 0;
 pub fn update_time_used() void {
@@ -63,20 +65,21 @@ pub const Task = struct {
 
     pub fn destroy(self: *Task) void {
         vmem.free(self.esp);
-        vmem.free(@ptrToInt(self));
+        vmem.destroy(self);
     }
 };
 
 ///ASM
 extern fn switch_tasks(new_esp: usize, old_esp_addr: usize) void;
 
-pub fn new(entrypoint: usize) !void {
+pub fn new(entrypoint: usize) !*TaskNode {
     task.lock_scheduler();
     defer task.unlock_scheduler();
 
     const node = try vmem.create(TaskNode);
     node.data = try Task.create(entrypoint);
     ready_tasks.prepend(node);
+    return node;
 }
 
 pub fn sleep_tick(tick: usize) void {
@@ -115,6 +118,67 @@ pub fn usleep(usec: u64) !void {
     schedule();
 }
 
+pub fn block(state: TaskState) void {
+    assert(current_task.data.state == .Running);
+
+    assert(state != .Running);
+    assert(state != .ReadyToRun);
+
+    lock_scheduler();
+    defer unlock_scheduler();
+
+    update_time_used();
+    current_task.data.state = state;
+    blocked_tasks.append(current_task);
+    schedule();
+}
+
+pub fn unblock(node: *TaskNode) void {
+    lock_scheduler();
+    node.data.state = .ReadyToRun;
+    blocked_tasks.remove(node);
+    if (ready_tasks.first == null) {
+        // Only one task was running before, so pre-empt
+        switch_to(node);
+    } else {
+        // There's at least one task on the "ready to run" queue already, so don't pre-empt
+        ready_tasks.append(node);
+        unlock_scheduler();
+    }
+}
+
+pub fn terminate() void {
+    assert(current_task.data.state == .Running);
+    lock_scheduler();
+
+    current_task.data.state = .Terminated;
+    terminated_tasks.append(current_task);
+
+    // Block this task (note: task switch will be postponed until scheduler lock is released)
+
+    // Make sure the cleaner task isn't paused
+    unblock(cleaner_task);
+    unlock_scheduler();
+
+    preempt();
+
+    println("Terminated task was revived, what the fuck?");
+    x86.hang();
+}
+
+pub fn cleaner_loop() noreturn {
+    while (true) {
+        if (terminated_tasks.popFirst()) |n| {
+            notify("DESTROYING {}", n.data.tid);
+            n.data.destroy();
+            vmem.destroy(n);
+        } else {
+            notify("NOTHING TO CLEAN");
+            block(.Paused);
+        }
+    }
+}
+
 pub var IRQ_disable_counter: usize = 0;
 pub var postpone_task_switches_counter: isize = 0; // this counter can go negative when we are scheduling after a postpone
 pub var postpone_task_switches_flag: bool = false;
@@ -128,9 +192,8 @@ pub fn lock_scheduler() void {
 pub fn unlock_scheduler() void {
     if (constants.SMP == false) {
         assert(IRQ_disable_counter > 0);
-        assert(postpone_task_switches_counter > 0);
         postpone_task_switches_counter -= 1;
-        if (postpone_task_switches_flag == true and postpone_task_switches_counter == 1) {
+        if (postpone_task_switches_flag == true and postpone_task_switches_counter == 0) {
             postpone_task_switches_flag = false;
             notify("AFTER POSTPONE");
             schedule();
@@ -142,7 +205,7 @@ pub fn unlock_scheduler() void {
 }
 
 pub fn preempt() void {
-    if (current_task.data.state != .Running) return;
+    if (current_task.data.state != .Running and current_task.data.state != .Terminated) return;
 
     update_time_used();
     if (ready_tasks.first == null) {
@@ -196,7 +259,7 @@ pub fn schedule() void {
     assert(current_task.data.state != .ReadyToRun);
 
     // postponed
-    if (postpone_task_switches_counter != 1 and current_task.data.state == .Running) {
+    if (postpone_task_switches_counter != 0 and current_task.data.state == .Running) {
         postpone_task_switches_flag = true;
         notify("POSTPONING SCHEDULE");
         return;
@@ -287,32 +350,3 @@ pub fn format() void {
     var sit = sleeping_tasks.first;
     while (sit) |node| : (sit = node.next) println("{} {}", node.data.data, node.counter);
 }
-
-// pub fn block(state: TaskState) void {
-//     assert(current_task.data.state == .Running);
-
-//     assert(state != .Running);
-//     assert(state != .ReadyToRun);
-
-//     lock_scheduler();
-//     defer unlock_scheduler();
-
-//     update_time_used();
-//     current_task.data.state = state;
-//     blocked_tasks.append(current_task);
-//     schedule();
-// }
-
-// pub fn unblock(node: *TaskNode) void {
-//     lock_scheduler();
-//     node.data.state = .ReadyToRun;
-//     blocked_tasks.remove(node);
-//     if (ready_tasks.first == null) {
-//         // Only one task was running before, so pre-empt
-//         switch_to(node);
-//     } else {
-//         // There's at least one task on the "ready to run" queue already, so don't pre-empt
-//         ready_tasks.append(node);
-//         unlock_scheduler();
-//     }
-// }

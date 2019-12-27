@@ -29,6 +29,10 @@ pub fn create(comptime T: type) !*T {
     return @intToPtr(*T, try malloc(@sizeOf(T)));
 }
 
+pub fn destroy(O: var) void {
+    vmem.free(@ptrToInt(O));
+}
+
 pub fn free(address: usize) void {
     x86.paging.unmap(address);
     stack[stack_index] = address;
