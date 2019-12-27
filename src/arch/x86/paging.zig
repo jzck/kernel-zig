@@ -15,19 +15,14 @@ const HUGE = 0x80;
 
 pub var pageDirectory: [1024]PageEntry align(4096) linksection(".bss") = [_]PageEntry{0} ** 1024;
 
-fn pageFault() void {
-    kernel.println("pagefault");
-    while (true) asm volatile ("hlt");
-}
-
 // TODO: inline these
 fn pageBase(virt: usize) usize {
     return virt & (~PAGE_SIZE +% 1);
 }
-fn pde(virt: usize) *PageEntry {
+pub fn pde(virt: usize) *PageEntry {
     return &PD[virt >> 22]; //relies on recursive mapping
 }
-fn pte(virt: usize) *PageEntry {
+pub fn pte(virt: usize) *PageEntry {
     return &PT[virt >> 12]; //relies on recursive mapping
 }
 
@@ -64,7 +59,6 @@ pub fn initialize() void {
     // TODO: verify is this a hack?
     assert(pmem.stack_end < kernel.layout.IDENTITY);
 
-    interrupt.register(14, pageFault);
     setupPaging(@ptrToInt(&pageDirectory[0])); //asm routine
 }
 

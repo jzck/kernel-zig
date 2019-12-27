@@ -15,7 +15,9 @@ pub fn available() usize {
 }
 
 pub fn malloc(size: usize) !usize {
-    if (available() == 0) return error.OutOfMemory;
+    if (available() == 0) {
+        return error.OutOfMemory;
+    }
     stack_index -= 1;
     var vaddr: usize = stack[stack_index];
     try x86.paging.mmap(vaddr, null);

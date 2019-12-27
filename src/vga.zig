@@ -64,6 +64,7 @@ pub fn clear() void {
 }
 pub fn topbar() void {
     const bg = vga.background;
+    // println("topbar1");
     while (true) {
         const cursor = vga.cursor;
         vga.background = Color.Red;
@@ -73,13 +74,14 @@ pub fn topbar() void {
         time.uptime();
         print(" | ");
         task.format_short();
+        // print(" ({})", task.IRQ_disable_counter);
         println("");
 
         vga.cursor_enabled = true;
         vga.cursor = cursor;
         vga.background = bg;
 
-        task.usleep(500 * 1000) catch unreachable; // 60ms
+        task.usleep(50 * 1000) catch unreachable; // 60ms
     }
 }
 

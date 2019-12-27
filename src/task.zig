@@ -17,6 +17,7 @@ var timer_last_count: u64 = 0;
 pub fn update_time_used() void {
     const current_count = time.offset_us;
     const elapsed = current_count - timer_last_count;
+    // if (current_task.data.tid == 1) println("{} adding {} time", current_task.data.tid, elapsed);
     timer_last_count = current_count;
     current_task.data.time_used += elapsed;
 }
@@ -24,8 +25,9 @@ pub fn update_time_used() void {
 pub const TaskState = enum {
     Running,
     ReadyToRun,
-    Blocked,
+    Paused,
     Sleeping,
+    Terminated,
 };
 
 pub const Task = struct {
@@ -59,7 +61,6 @@ pub const Task = struct {
         return t;
     }
 
-    // responsible for calling the task entrypoint
     pub fn destroy(self: *Task) void {
         vmem.free(self.esp);
         vmem.free(@ptrToInt(self));
@@ -67,68 +68,56 @@ pub const Task = struct {
 };
 
 ///ASM
-// extern fn jmp_to_entrypoint(entrypoint: usize) void;
-// // this is only run once on the first execution of a task
-// pub fn birth() void {
-//     println("birth!");
-//     unlock_scheduler();
-//     const entrypoint = current_task.data.entrypoint;
-//     jmp_to_entrypoint(entrypoint);
-//     // comptime asm ("jmp %[entrypoint]"
-//     //     :
-//     //     : [entrypoint] "{ecx}" (entrypoint)
-//     // );
-// }
-///ASM
 extern fn switch_tasks(new_esp: usize, old_esp_addr: usize) void;
 
 pub fn new(entrypoint: usize) !void {
+    task.lock_scheduler();
+    defer task.unlock_scheduler();
+
     const node = try vmem.create(TaskNode);
     node.data = try Task.create(entrypoint);
     ready_tasks.prepend(node);
 }
 
+pub fn sleep_tick(tick: usize) void {
+    task.lock_scheduler();
+    defer task.unlock_scheduler();
+
+    task.sleeping_tasks.decrement(tick);
+    var popped = false;
+    while (task.sleeping_tasks.popZero()) |sleepnode| {
+        // println("finished sleeping");
+        // task.format();
+        const tasknode = sleepnode.data;
+        tasknode.data.state = .ReadyToRun;
+        vmem.free(@ptrToInt(sleepnode));
+        task.ready_tasks.prepend(tasknode);
+        popped = true;
+    }
+    if (popped) preempt();
+}
+
 // TODO: make a sleep without malloc
 pub fn usleep(usec: u64) !void {
+    assert(current_task.data.state == .Running);
+
     const node = try vmem.create(SleepNode);
 
+    update_time_used();
+
     lock_scheduler();
+    defer unlock_scheduler();
+
     current_task.data.state = .Sleeping;
     node.data = current_task;
     node.counter = usec;
     sleeping_tasks.insert(node);
     schedule();
-    unlock_scheduler();
 }
 
-pub fn block(state: TaskState) void {
-    assert(state != .Running);
-    assert(state != .ReadyToRun);
-
-    lock_scheduler();
-    current_task.data.state = state;
-    blocked_tasks.append(current_task);
-    schedule();
-    unlock_scheduler();
-}
-
-pub fn unblock(node: *TaskNode) void {
-    lock_scheduler();
-    node.data.state = .ReadyToRun;
-    blocked_tasks.remove(node);
-    if (ready_tasks.first == null) {
-        // Only one task was running before, so pre-empt
-        switch_to(node);
-    } else {
-        // There's at least one task on the "ready to run" queue already, so don't pre-empt
-        ready_tasks.append(node);
-        unlock_scheduler();
-    }
-}
-
-var IRQ_disable_counter: usize = 0;
-var postpone_task_switches_counter: isize = 0; // this counter can go negative when we are scheduling after a postpone
-var postpone_task_switches_flag: bool = false;
+pub var IRQ_disable_counter: usize = 0;
+pub var postpone_task_switches_counter: isize = 0; // this counter can go negative when we are scheduling after a postpone
+pub var postpone_task_switches_flag: bool = false;
 pub fn lock_scheduler() void {
     if (constants.SMP == false) {
         x86.cli();
@@ -138,38 +127,44 @@ pub fn lock_scheduler() void {
 }
 pub fn unlock_scheduler() void {
     if (constants.SMP == false) {
+        assert(IRQ_disable_counter > 0);
+        assert(postpone_task_switches_counter > 0);
         postpone_task_switches_counter -= 1;
-        if (postpone_task_switches_flag == true and postpone_task_switches_counter == 0) {
-            // in this section, postpone counter will go to -1 during the task
+        if (postpone_task_switches_flag == true and postpone_task_switches_counter == 1) {
             postpone_task_switches_flag = false;
+            notify("AFTER POSTPONE");
             schedule();
         }
         IRQ_disable_counter -= 1;
-        if (IRQ_disable_counter == 0) {
-            x86.sti();
-            x86.hlt();
-        }
+        // must be the last instruction because we do interrupts inside interrupts
+        if (IRQ_disable_counter == 0) x86.sti();
     }
+}
+
+pub fn preempt() void {
+    if (current_task.data.state != .Running) return;
+
+    update_time_used();
+    if (ready_tasks.first == null) {
+        notify("NO PREEMPT SINGLE TASK");
+        time.task_slice_remaining = 0;
+        return;
+    }
+
+    lock_scheduler();
+    schedule();
+    unlock_scheduler();
 }
 
 // expects:
 //  - chosen is .ReadyToRun
 //  - chosen is not in any scheduler lists
+//  - current_task has been moved to a queue
 //  - scheduler is locked
 //  - the tasks being switched to will unlock_scheduler()
 pub fn switch_to(chosen: *TaskNode) void {
     assert(chosen.data.state == .ReadyToRun);
-
-    if (postpone_task_switches_counter != 0) {
-        postpone_task_switches_flag = true;
-        return;
-    }
-
-    // in case of self preemption, shouldn't happen really
-    if (current_task.data.state == .Running) {
-        current_task.data.state = .ReadyToRun;
-        ready_tasks.append(current_task);
-    }
+    assert(current_task.data.state != .Running);
 
     // save old stack
     const old_task_esp_addr = &current_task.data.esp;
@@ -177,7 +172,10 @@ pub fn switch_to(chosen: *TaskNode) void {
     // switch states
     chosen.data.state = .Running;
     current_task = chosen;
+    if (ready_tasks.first == null) time.task_slice_remaining = 0;
+    if (ready_tasks.first != null) time.task_slice_remaining = time.TASK_SLICE;
 
+    // we don't have any startup code for tasks, so i do it here
     if (current_task.data.born == false) {
         current_task.data.born = true;
         unlock_scheduler();
@@ -189,65 +187,83 @@ pub fn switch_to(chosen: *TaskNode) void {
 
 pub var CPU_idle_time: u64 = 0;
 pub var CPU_idle_start_time: u64 = 0;
+// expects:
+//  lock_scheduler should be called before
+//  unlock_scheduler should be called after
+//  current_task is blocked or running (preemption)
 pub fn schedule() void {
     assert(IRQ_disable_counter > 0);
+    assert(current_task.data.state != .ReadyToRun);
 
-    if (postpone_task_switches_counter != 0) {
+    // postponed
+    if (postpone_task_switches_counter != 1 and current_task.data.state == .Running) {
         postpone_task_switches_flag = true;
+        notify("POSTPONING SCHEDULE");
         return;
     }
-
-    update_time_used();
-
-    // format();
+    // next task
     if (ready_tasks.popFirst()) |t| {
-        // somebody is ready to run
-        // std doesn't do this, for developer flexibility maybe?
         t.prev = null;
         t.next = null;
-        switch_to(t);
-    } else if (current_task.data.state == .Running) {
-        // single task mode, carry on
+
+        // notify("SWITCHING TO 0x{x}", t.data.esp);
+        if (current_task.data.state == .Running) {
+            current_task.data.state = .ReadyToRun;
+            ready_tasks.append(current_task);
+        }
+        return switch_to(t);
+    }
+    // single task
+    if (current_task.data.state == .Running) {
+        notify("SINGLE TASK");
+        time.task_slice_remaining = 0;
         return;
-    } else {
-        // idle mode
-        notify_idle();
+    }
+    // no tasks
+    idle_mode();
+}
 
-        // borrow the current task
-        const borrow = current_task;
+fn idle_mode() void {
+    assert(ready_tasks.first == null);
+    assert(current_task.data.state != .Running);
+    assert(current_task.data.state != .ReadyToRun);
 
-        CPU_idle_start_time = time.offset_us; //for power management
+    notify("IDLE");
 
-        while (true) { // idle loop
-            if (ready_tasks.popFirst()) |t| { // found a new task
-                CPU_idle_time += time.offset_us - CPU_idle_start_time; // count time as idle
-                timer_last_count = time.offset_us; // don't count time as used
-                // println("went into idle mode for {}usecs", time.offset_us - CPU_idle_start_time);
+    // borrow the current task
+    const borrow = current_task;
 
-                if (t == borrow) {
-                    t.data.state = .Running;
-                    return; //no need to ctx_switch we are already running this
-                }
-                return switch_to(t);
-            } else { // no tasks ready, let the timer fire
-                x86.sti(); // enable interrupts to allow the timer to fire
-                x86.hlt(); // halt and wait for the timer to fire
-                x86.cli(); // disable interrupts again to see if there is something to do
+    CPU_idle_start_time = time.offset_us; //for power management
+
+    while (true) { // idle loop
+        if (ready_tasks.popFirst()) |t| { // found a new task
+            CPU_idle_time += time.offset_us - CPU_idle_start_time; // count time as idle
+            timer_last_count = time.offset_us; // don't count time as used
+            // println("went into idle mode for {}usecs", time.offset_us - CPU_idle_start_time);
+
+            if (t == borrow) {
+                t.data.state = .Running;
+                return; //no need to ctx_switch we are already running this
             }
+            return switch_to(t);
+        } else { // no tasks ready, let the timer fire
+            x86.sti(); // enable interrupts to allow the timer to fire
+            x86.hlt(); // halt and wait for the timer to fire
+            x86.cli(); // disable interrupts again to see if there is something to do
         }
     }
 }
 
-fn notify_idle() void {
+pub fn notify(comptime message: []const u8, args: ...) void {
     const bg = vga.background;
     const fg = vga.foreground;
     const cursor = vga.cursor;
     vga.background = fg;
     vga.foreground = bg;
-    vga.cursor = 80 - 4;
+    vga.cursor = 80 - message.len - 10;
     vga.cursor_enabled = false;
 
-    print("IDLE");
+    print(message, args);
 
     vga.cursor_enabled = true;
     vga.cursor = cursor;
@@ -271,3 +287,32 @@ pub fn format() void {
     var sit = sleeping_tasks.first;
     while (sit) |node| : (sit = node.next) println("{} {}", node.data.data, node.counter);
 }
+
+// pub fn block(state: TaskState) void {
+//     assert(current_task.data.state == .Running);
+
+//     assert(state != .Running);
+//     assert(state != .ReadyToRun);
+
+//     lock_scheduler();
+//     defer unlock_scheduler();
+
+//     update_time_used();
+//     current_task.data.state = state;
+//     blocked_tasks.append(current_task);
+//     schedule();
+// }
+
+// pub fn unblock(node: *TaskNode) void {
+//     lock_scheduler();
+//     node.data.state = .ReadyToRun;
+//     blocked_tasks.remove(node);
+//     if (ready_tasks.first == null) {
+//         // Only one task was running before, so pre-empt
+//         switch_to(node);
+//     } else {
+//         // There's at least one task on the "ready to run" queue already, so don't pre-empt
+//         ready_tasks.append(node);
+//         unlock_scheduler();
+//     }
+// }

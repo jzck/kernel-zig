@@ -57,9 +57,31 @@ pub fn initialize() void {
     isr.install_exceptions();
     isr.install_irqs();
     isr.install_syscalls();
-    interrupt.registerIRQ(0, interrupt.pit_handler);
+    interrupt.registerIRQ(0, kernel.time.increment);
     interrupt.registerIRQ(1, kernel.ps2.keyboard_handler);
+    interrupt.register(1, debug_trap);
+    interrupt.register(13, general_protection_fault);
+    interrupt.register(14, page_fault);
 
     // load IDT
     lidt(@ptrToInt(&idtr));
+}
+
+fn general_protection_fault() void {
+    kernel.println("general protection fault");
+}
+
+fn debug_trap() void {
+    kernel.println("debug fault/trap");
+    kernel.println("dr7: 0b{b}", dr7());
+}
+
+fn page_fault() void {
+    const vaddr = cr2();
+    kernel.println("cr2: 0x{x}", vaddr);
+    kernel.println("phy: 0x{x}", paging.translate(vaddr));
+    kernel.println("pde: 0x{x} ({})", paging.pde(vaddr), vaddr >> 22);
+    kernel.println("pte: 0x{x} ({})", paging.pte(vaddr), vaddr >> 12);
+    paging.format();
+    while (true) asm volatile ("hlt");
 }

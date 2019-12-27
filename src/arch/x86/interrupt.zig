@@ -57,7 +57,11 @@ export fn interruptDispatch() void {
     switch (n) {
         // Exceptions.
         EXCEPTION_0...EXCEPTION_31 => {
-            handlers[n]();
+            kernel.println("");
+            kernel.println("num: {}", isr.context.interrupt_n);
+            kernel.println("err: {}", isr.context.error_code);
+            kernel.println("ip:  0x{x}", isr.context.eip);
+            return handlers[n]();
         },
 
         // IRQs.
@@ -181,27 +185,14 @@ pub fn maskIRQ(irq: u8, mask: bool) void {
 }
 
 // configures the chan0 with a rate generator, which will trigger irq0
+pub const divisor = 2685;
+pub const tick = 2251; // f = 1.193182 MHz, TODO: turn into a function
 pub fn configPIT() void {
     const chanNum = 0;
     const chan = PIT_CHAN0;
-    const divisor = 2685;
     const LOHI = 0b11; // bit4 | bit5
     const PITMODE_RATE_GEN = 0x2;
     outb(PIT_CMD, chanNum << 6 | LOHI << 4 | PITMODE_RATE_GEN << 1);
     outb(PIT_CHAN0, divisor & 0xff);
     outb(PIT_CHAN0, divisor >> 8);
-}
-
-pub fn pit_handler() void {
-    // pit freq = 1.193182 MHz
-    // chan0 divisor = 2685
-    // PIT_RATE in us
-    kernel.time.increment(2251);
-    kernel.task.sleeping_tasks.decrement(2251);
-    while (kernel.task.sleeping_tasks.popZero()) |sleepnode| {
-        const tasknode = sleepnode.data;
-        tasknode.data.state = .ReadyToRun;
-        kernel.vmem.free(@ptrToInt(sleepnode));
-        kernel.task.ready_tasks.prepend(tasknode);
-    }
 }

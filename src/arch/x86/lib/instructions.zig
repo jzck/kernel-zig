@@ -33,3 +33,15 @@ pub inline fn lidt(idtr: usize) void {
         : [idtr] "r" (idtr)
     );
 }
+
+pub fn cr2() usize {
+    return asm volatile ("movl %%cr2, %[result]"
+        : [result] "=r" (-> usize)
+    );
+}
+
+pub fn dr7() usize {
+    return asm volatile ("movl %%dr7, %[result]"
+        : [result] "=r" (-> usize)
+    );
+}

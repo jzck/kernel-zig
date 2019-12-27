@@ -1,8 +1,19 @@
 usingnamespace @import("index.zig");
 
 pub var offset_us: u64 = 0;
-pub fn increment(value: u32) void {
-    offset_us += value;
+pub var task_slice_remaining: u64 = 0;
+pub var TASK_SLICE: u64 = 50 * 1000;
+pub fn increment() void {
+    const tick = x86.interrupt.tick; //us
+
+    offset_us += tick;
+    task.sleep_tick(tick);
+
+    if (task_slice_remaining != 0) {
+        // There is a time slice length
+        if (task_slice_remaining <= tick) return task.preempt();
+        if (task_slice_remaining > tick) task_slice_remaining -= tick;
+    }
 }
 
 pub fn uptime() void {
