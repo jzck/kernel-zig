@@ -25,11 +25,12 @@ pub fn update_time_used() void {
 }
 
 pub const TaskState = enum {
-    Running,
-    ReadyToRun,
-    Paused,
-    Sleeping,
-    Terminated,
+    Running, // <=> current_task
+    ReadyToRun, // <=> inside of ready_tasks
+    IOWait, // waiting to be woken up by IO
+    Paused, // unpaused arbitrarily by another process
+    Sleeping, // woken up by timer
+    Terminated, // <=> inside of terminated_tasks, waiting to be destroyed
 };
 
 pub const Task = struct {
@@ -124,6 +125,8 @@ pub fn block(state: TaskState) void {
     assert(state != .Running);
     assert(state != .ReadyToRun);
 
+    // println("blocking {} as {}", current_task.data.tid, state);
+
     lock_scheduler();
     defer unlock_scheduler();
 
@@ -134,17 +137,22 @@ pub fn block(state: TaskState) void {
 }
 
 pub fn unblock(node: *TaskNode) void {
+    if (node.data.state != .Paused and node.data.state != .IOWait) return;
     lock_scheduler();
+    defer unlock_scheduler();
+
     node.data.state = .ReadyToRun;
     blocked_tasks.remove(node);
-    if (ready_tasks.first == null) {
-        // Only one task was running before, so pre-empt
-        switch_to(node);
-    } else {
-        // There's at least one task on the "ready to run" queue already, so don't pre-empt
-        ready_tasks.append(node);
-        unlock_scheduler();
-    }
+
+    // TODO: find a way to fastpath here, hard because of unblock inside of interrupts
+    // if (current_task.data.state != .Running and ready_tasks.first == null) {
+    //     // Only one task was running before, fastpath
+    //     switch_to(node);
+    // } else {
+    //     // There's at least one task on the "ready to run" queue already, so don't pre-empt
+    //     ready_tasks.append(node);
+    // }
+    ready_tasks.append(node);
 }
 
 pub fn terminate() void {

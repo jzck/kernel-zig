@@ -1,4 +1,5 @@
 pub usingnamespace @import("index.zig");
+pub const allocator: std.mem.Allocator = undefined;
 
 // TODO: make a better memory allocator
 // stupid simple virtual memory allocator
@@ -39,7 +40,7 @@ pub fn free(address: usize) void {
     stack_index += 1;
 }
 
-pub fn initialize() void {
+pub fn init() void {
     var addr: usize = layout.HEAP;
     while (addr < layout.HEAP_END) : (addr += x86.PAGE_SIZE) {
         // println("addr {x}", addr);

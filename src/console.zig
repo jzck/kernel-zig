@@ -1,9 +1,6 @@
 usingnamespace @import("index.zig");
 
-// shitty ring buffer, fight me.
-var input_ring_buffer: [1024]u8 = [_]u8{0} ** 1024;
-var input_read_index: u10 = 0;
-var input_write_index: u10 = 0;
+var input_ring: Ring(u8) = undefined;
 
 var command: [10]u8 = undefined;
 var command_len: usize = 0;
@@ -52,19 +49,17 @@ pub fn keypress(char: u8) void {
     }
 }
 
-pub fn buffer_write(char: u8) void {
-    input_ring_buffer[input_write_index] = char;
-    input_write_index +%= 1;
+pub fn keyboard_callback(char: u8) void {
+    input_ring.write(char);
 }
 
 pub fn loop() void {
-    ps2.keyboard_callback = buffer_write;
+    input_ring.init() catch unreachable;
+    input_ring.task = task.current_task;
+    ps2.keyboard_callback = keyboard_callback;
     print("> ");
     while (true) {
-        if (input_write_index - input_read_index > 0) {
-            keypress(input_ring_buffer[input_read_index]);
-            input_read_index +%= 1;
-        }
-        // task.usleep(10 * 1000) catch unreachable;
+        while (input_ring.read()) |c| keypress(c);
+        task.block(.IOWait);
     }
 }

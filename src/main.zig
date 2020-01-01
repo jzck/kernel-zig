@@ -22,7 +22,7 @@ export fn kmain(magic: u32, info: *const multiboot.MultibootInfo) noreturn {
     println("--- x86 initialization ---");
     x86.x86_main(info);
     println("--- core initialization ---");
-    vmem.initialize();
+    vmem.init();
     pci.scan();
 
     task.cleaner_task = task.new(@ptrToInt(task.cleaner_loop)) catch unreachable;

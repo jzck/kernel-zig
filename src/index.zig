@@ -3,6 +3,7 @@ pub const builtin = @import("builtin");
 pub const std = @import("std");
 pub const assert = std.debug.assert;
 pub usingnamespace @import("delta_queue.zig");
+pub usingnamespace @import("ring_buffer.zig");
 pub usingnamespace @import("vga.zig");
 
 ///arch
