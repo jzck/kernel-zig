@@ -73,6 +73,8 @@ pub fn topbar() void {
 
         time.uptime();
         print(" | ");
+        time.utilisation();
+        print(" | ");
         task.format_short();
         // print(" ({})", task.IRQ_disable_counter);
         println("");

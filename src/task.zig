@@ -78,36 +78,35 @@ pub fn new(entrypoint: usize) !*TaskNode {
     defer task.unlock_scheduler();
 
     const node = try vmem.create(TaskNode);
+    errdefer vmem.destroy(node);
+
     node.data = try Task.create(entrypoint);
     ready_tasks.prepend(node);
     return node;
 }
 
-pub fn sleep_tick(tick: usize) void {
+pub fn wakeup_tick(tick: usize) bool {
     task.lock_scheduler();
     defer task.unlock_scheduler();
 
     task.sleeping_tasks.decrement(tick);
     var popped = false;
     while (task.sleeping_tasks.popZero()) |sleepnode| {
-        // println("finished sleeping");
-        // task.format();
         const tasknode = sleepnode.data;
         tasknode.data.state = .ReadyToRun;
         vmem.free(@ptrToInt(sleepnode));
         task.ready_tasks.prepend(tasknode);
         popped = true;
     }
-    if (popped) preempt();
+    return popped;
 }
 
 // TODO: make a sleep without malloc
 pub fn usleep(usec: u64) !void {
     assert(current_task.data.state == .Running);
+    update_time_used();
 
     const node = try vmem.create(SleepNode);
-
-    update_time_used();
 
     lock_scheduler();
     defer unlock_scheduler();
@@ -121,16 +120,15 @@ pub fn usleep(usec: u64) !void {
 
 pub fn block(state: TaskState) void {
     assert(current_task.data.state == .Running);
-
     assert(state != .Running);
     assert(state != .ReadyToRun);
+    update_time_used();
 
     // println("blocking {} as {}", current_task.data.tid, state);
 
     lock_scheduler();
     defer unlock_scheduler();
 
-    update_time_used();
     current_task.data.state = state;
     blocked_tasks.append(current_task);
     schedule();
@@ -190,14 +188,14 @@ pub fn cleaner_loop() noreturn {
 pub var IRQ_disable_counter: usize = 0;
 pub var postpone_task_switches_counter: isize = 0; // this counter can go negative when we are scheduling after a postpone
 pub var postpone_task_switches_flag: bool = false;
-pub fn lock_scheduler() void {
+fn lock_scheduler() void {
     if (constants.SMP == false) {
         x86.cli();
         IRQ_disable_counter += 1;
         postpone_task_switches_counter += 1;
     }
 }
-pub fn unlock_scheduler() void {
+fn unlock_scheduler() void {
     if (constants.SMP == false) {
         assert(IRQ_disable_counter > 0);
         postpone_task_switches_counter -= 1;
@@ -331,7 +329,7 @@ pub fn notify(comptime message: []const u8, args: ...) void {
     const cursor = vga.cursor;
     vga.background = fg;
     vga.foreground = bg;
-    vga.cursor = 80 - message.len - 10;
+    vga.cursor = 80 - message.len;
     vga.cursor_enabled = false;
 
     print(message, args);
