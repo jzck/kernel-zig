@@ -12,12 +12,16 @@ fn sleep_for_2() void {
 fn execute(input: []u8) void {
     const eql = std.mem.eql;
     if (eql(u8, input, "clear")) return vga.clear();
-    if (eql(u8, input, "x86paging")) return x86.paging.format();
-    if (eql(u8, input, "x86memory")) return x86.pmem.format();
+    if (eql(u8, input, "paging")) return x86.paging.format();
+    if (eql(u8, input, "memory")) return x86.pmem.format();
     if (eql(u8, input, "tasks")) return task.format();
     if (eql(u8, input, "tasks")) return task.format_short();
     if (eql(u8, input, "lspci")) return pci.lspci();
     if (eql(u8, input, "sleep2")) return sleep_for_2();
+    if (eql(u8, input, "t-sleep2")) {
+        _ = task.new(@ptrToInt(sleep_for_2)) catch unreachable;
+        return;
+    }
     if (eql(u8, input, "uptime")) return time.uptime();
     println("{}: command not found", input);
 }

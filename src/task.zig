@@ -54,6 +54,10 @@ pub const Task = struct {
 
         // allocate a new stack
         t.esp = (try vmem.malloc(STACK_SIZE)) + STACK_SIZE;
+        // if the tasks rets from its main function, it will go to terminate
+        // NOTE: if terminate is called this way it has an incorrect ebp!
+        t.esp -= 4;
+        @intToPtr(*usize, t.esp).* = @ptrToInt(task.terminate);
         // this will be what ret goes to
         t.esp -= 4;
         @intToPtr(*usize, t.esp).* = entrypoint;
@@ -153,23 +157,18 @@ pub fn unblock(node: *TaskNode) void {
     ready_tasks.append(node);
 }
 
-pub fn terminate() void {
+pub fn terminate() noreturn {
     assert(current_task.data.state == .Running);
-    lock_scheduler();
 
+    lock_scheduler();
     current_task.data.state = .Terminated;
     terminated_tasks.append(current_task);
-
-    // Block this task (note: task switch will be postponed until scheduler lock is released)
-
-    // Make sure the cleaner task isn't paused
     unblock(cleaner_task);
     unlock_scheduler();
 
     preempt();
 
-    println("Terminated task was revived, what the fuck?");
-    x86.hang();
+    unreachable;
 }
 
 pub fn cleaner_loop() noreturn {
