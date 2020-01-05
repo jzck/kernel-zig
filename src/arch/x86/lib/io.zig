@@ -19,6 +19,17 @@ pub inline fn inl(port: u16) u32 {
     );
 }
 
+pub inline fn insl(port: u16, addr: var, cnt: usize) void {
+    asm volatile ("cld; repne; insl;"
+        : [addr] "={edi}" (addr),
+          [cnt] "={ecx}" (cnt)
+        : [port] "{dx}" (port),
+          [addr] "0" (addr),
+          [cnt] "1" (cnt)
+        : "memory", "cc"
+    );
+}
+
 pub inline fn outb(port: u16, value: u8) void {
     asm volatile ("outb %[value], %[port]"
         :

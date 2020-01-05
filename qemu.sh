@@ -4,6 +4,7 @@ QEMU_GDB_PORT=4242
 KERNEL=build/kernel
 
 start() {
+	touch disk.img
 	sudo pkill -9 qemu
 	sudo qemu-system-i386 \
 		-gdb tcp::${QEMU_GDB_PORT} \
@@ -11,6 +12,7 @@ start() {
 		-enable-kvm \
 		-m 1341M \
 		-curses \
+		-hda disk.img \
 		-kernel ${KERNEL}
 		# -drive file=disk.img,if=virtio\
 		# -no-reboot \

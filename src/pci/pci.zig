@@ -1,5 +1,6 @@
 pub usingnamespace @import("../index.zig");
 pub const virtio = @import("virtio.zig");
+pub const ide = @import("ide.zig");
 
 const PCI_CONFIG_ADDRESS = 0xCF8;
 const PCI_CONFIG_DATA = 0xCFC;
@@ -94,10 +95,28 @@ pub const PciDevice = struct {
     pub fn header_type(self: PciDevice) u8 {
         return self.config_read(u8, 0xe);
     }
-
+    pub fn intr_line(self: PciDevice) u8 {
+        return self.config_read(u8, 0x3c);
+    }
+    pub fn bar(self: PciDevice, comptime n: usize) u32 {
+        assert(n <= 5);
+        return self.config_read(u32, 0x10 + 4 * n);
+    }
     // only for header_type == 0
     pub fn subsystem(self: PciDevice) u16 {
         return self.config_read(u8, 0x2e);
+    }
+
+    pub inline fn config_write(self: PciDevice, value: var, comptime offset: u8) void {
+        // ask for access before writing config
+        x86.outl(PCI_CONFIG_ADDRESS, self.address(offset));
+        switch (@typeOf(value)) {
+            // read the correct size
+            u8 => return x86.outb(PCI_CONFIG_DATA, value),
+            u16 => return x86.outw(PCI_CONFIG_DATA, value),
+            u32 => return x86.outl(PCI_CONFIG_DATA, value),
+            else => @compileError("pci config space only supports writing u8, u16, u32."),
+        }
     }
 
     pub inline fn config_read(self: PciDevice, comptime size: type, comptime offset: u8) size {
@@ -114,7 +133,7 @@ pub const PciDevice = struct {
 };
 
 const Driver = struct {
-    name: [*]u8,
+    name: []const u8,
     class: u8,
     subclass: u8,
     vendor: ?u16 = null,
@@ -122,8 +141,10 @@ const Driver = struct {
     init: fn (PciDevice) void,
 };
 
-const name = "virtio-blk";
-pub var Drivers: [1]Driver = [_]Driver{Driver{ .name = &name, .class = 0x1, .subclass = 0x0, .vendor = 0x1af4, .subsystem = 0x2, .init = virtio.init }};
+pub var Drivers = [_]Driver{
+    Driver{ .name = "virtio-blk"[0..], .class = 0x1, .subclass = 0x0, .vendor = 0x1af4, .subsystem = 0x2, .init = virtio.init },
+    Driver{ .name = "ide-ata", .class = 0x1, .subclass = 0x1, .init = ide.init },
+};
 
 // TODO: factor 2 functions when anonymous fn is released
 pub fn scan() void {
