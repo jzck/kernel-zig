@@ -1,3 +1,5 @@
+#!/bin/bash
+
 QEMU_SOCKET=/tmp/qemu.sock
 QEMU_MONITOR="sudo socat - UNIX-CONNECT:${QEMU_SOCKET}"
 QEMU_GDB_PORT=4242
