@@ -7,7 +7,7 @@ KERNEL=build/kernel
 
 start() {
 	touch disk.img
-	sudo pkill -9 qemu
+	sudo pkill -9 qemu-system-i386
 	sudo qemu-system-i386 \
 		-gdb tcp::${QEMU_GDB_PORT} \
 		-monitor unix:${QEMU_SOCKET},server,nowait \
