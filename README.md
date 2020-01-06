@@ -9,6 +9,13 @@
  - x86
    - MMU
    - interrupts
+   - pit timer
+ - scheduler
+   - time slice preemption with round robin
+   - sleep()
+   - block()/unblock()
+ - Storage
+   - IDE ATA driver (in progress)
 
 ### dependencies
 
@@ -24,10 +31,16 @@
 
  - `./qemu.sh start`
  - `./qemu.sh monitor`
- - `./qemu.sh gdb`
+ - `./qemu.sh quit`
+ - `gdb #see provided .gdbinit`
 
 # Notes
 
 ## interrupt call chain
 
 `interrupt` -> `idt[n]` -> `isrN` -> `isrDispatch` -> `handlers[n]` (default `unhandled()`)
+
+## References
+
+ - scheduling: https://wiki.osdev.org/Brendan%27s_Multi-tasking_Tutorial
+ - booting/paging/interrupts: https://os.phil-opp.com/
