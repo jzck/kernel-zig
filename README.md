@@ -42,5 +42,6 @@
 
 ## References
 
- - scheduling: https://wiki.osdev.org/Brendan%27s_Multi-tasking_Tutorial
+ - zig microkernel: https://github.com/AndreaOrru/zen
+ - scheduling tutorial: https://wiki.osdev.org/Brendan%27s_Multi-tasking_Tutorial
  - booting/paging/interrupts: https://os.phil-opp.com/
