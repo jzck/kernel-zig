@@ -142,7 +142,7 @@ const Driver = struct {
 };
 
 pub var Drivers = [_]Driver{
-    Driver{ .name = "virtio-blk"[0..], .class = 0x1, .subclass = 0x0, .vendor = 0x1af4, .subsystem = 0x2, .init = virtio.init },
+    Driver{ .name = "virtio-blk", .class = 0x1, .subclass = 0x0, .vendor = 0x1af4, .subsystem = 0x2, .init = virtio.init },
     Driver{ .name = "ide-ata", .class = 0x1, .subclass = 0x1, .init = ide.init },
 };
 
