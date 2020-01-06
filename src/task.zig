@@ -45,6 +45,7 @@ pub const Task = struct {
     pub fn create(entrypoint: usize) !*Task {
         // Allocate and initialize the thread structure.
         var t = try vmem.create(Task);
+        errdefer vmem.free(t);
 
         t.time_used = 0;
         t.state = .ReadyToRun;
