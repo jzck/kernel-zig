@@ -1,5 +1,7 @@
 # hobby kernel in zig
 
+![screenshot](screenshot.png)
+
 ### features
 
  - 80x25 frame buffer
