@@ -24,13 +24,13 @@ export fn kmain(magic: u32, info: *const multiboot.MultibootInfo) noreturn {
     println("--- core initialization ---");
     vmem.init();
     pci.scan();
+    println("--- finished booting --- ");
 
     task.cleaner_task = task.new(@ptrToInt(task.cleaner_loop)) catch unreachable;
     _ = task.new(@ptrToInt(topbar)) catch unreachable;
-    task.preempt();
+    _ = task.new(@ptrToInt(console.loop)) catch unreachable;
 
-    console.loop();
-    unreachable;
+    task.terminate();
 }
 
 pub fn panic(a: []const u8, b: ?*builtin.StackTrace) noreturn {
