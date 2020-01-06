@@ -23,18 +23,16 @@
 
   - [ziglang](https://github.com/ziglang/zig) 0.5.0
 
-# How to
-
-## compile
+### compiling
 
 `zig build` compiles and links the multiboot kernel (without a bootloader)
 
-## test
+### running
 
  - `./qemu.sh start`
  - `./qemu.sh monitor`
  - `./qemu.sh quit`
- - `gdb #see provided .gdbinit`
+ - `gdb` (see provided `.gdbinit`)
 
 # Notes
 
