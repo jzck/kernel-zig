@@ -5,24 +5,34 @@ var input_ring: Ring(u8) = undefined;
 var command: [10]u8 = undefined;
 var command_len: usize = 0;
 
-fn sleep_for_2() void {
+fn sleep2() void {
     task.usleep(2 * 1000 * 1000) catch unreachable;
 }
 
+fn t_sleep2() void {
+    _ = task.new(@ptrToInt(sleep2)) catch unreachable;
+}
+
+const Command = struct {
+    name: []const u8,
+    f: fn () void,
+};
+
+const commands = [_]Command{
+    Command{ .name = "clear", .f = clear },
+    Command{ .name = "paging", .f = x86.paging.format },
+    Command{ .name = "memory", .f = x86.pmem.format },
+    Command{ .name = "tasks", .f = task.format },
+    Command{ .name = "lspci", .f = pci.lspci },
+    Command{ .name = "sleep2", .f = sleep2 },
+    Command{ .name = "t-sleep2", .f = t_sleep2 },
+    Command{ .name = "uptime", .f = time.uptime },
+};
+
 fn execute(input: []u8) void {
-    const eql = std.mem.eql;
-    if (eql(u8, input, "clear")) return vga.clear();
-    if (eql(u8, input, "paging")) return x86.paging.format();
-    if (eql(u8, input, "memory")) return x86.pmem.format();
-    if (eql(u8, input, "tasks")) return task.format();
-    if (eql(u8, input, "lspci")) return pci.lspci();
-    if (eql(u8, input, "sleep2")) return sleep_for_2();
-    if (eql(u8, input, "t-sleep2")) {
-        _ = task.new(@ptrToInt(sleep_for_2)) catch unreachable;
-        return;
-    }
-    if (eql(u8, input, "uptime")) return time.uptime();
-    println("{}: command not found", input);
+    for (commands) |c| if (std.mem.eql(u8, input, c.name)) return c.f();
+    println("{}: command not found, list of available commands:", input);
+    for (commands) |c| println("{}", c.name);
 }
 
 pub fn keypress(char: u8) void {
