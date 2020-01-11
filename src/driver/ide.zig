@@ -189,6 +189,7 @@ fn ide_ata_access(direction: u8, drive: u8, lba: u64, numsects: u8, selector: u1
         head = @intCast(u8, (lba + 1 - sect) % (16 * 63) / (63)); // Head number is written to HDDEVSEL lower 4-bits.
         lba_mode = 0;
     }
+    kernel.println("lba_mode {}", lba_mode);
 
     // (III) Wait if the drive is busy;
     while (ide_read(channel, ATA_REG_STATUS) & ATA_SR_BSY != 0) {} // Wait if busy.)
@@ -283,14 +284,15 @@ fn ide_ata_access(direction: u8, drive: u8, lba: u64, numsects: u8, selector: u1
 pub const blockdev = kernel.bio.BlockDev{ .read = ide_block_read };
 pub const sectorbuffer = [1]u8{0} ** 512;
 pub fn ide_block_read(lba: u64) void {
-    _ = ide_read_sectors(0, 1, lba, 0x8, @ptrToInt(&sectorbuffer[0]));
+    const a = ide_read_sectors(0, 1, lba, 0x8, @ptrToInt(&sectorbuffer[0]));
+    if (a != 0) kernel.println("ide_read_sectors failed {}", a);
 }
 
-pub fn ide_read_sectors(drive: u8, numsects: u8, lba: u64, es: u8, edi: usize) u8 {
+pub fn ide_read_sectors(drive: u2, numsects: u8, lba: u64, es: u8, edi: usize) u8 {
     // 1: Check if the drive presents:
-    if (drive > 3 or ide_devices[drive].reserved == 0) {
+    if (ide_devices[drive].reserved == 0) {
         return 0x1; // Drive Not Found!
-    } else if (((lba + numsects) > ide_devices[drive].size) and (ide_devices[drive].idetype == IDE_ATA)) {
+    } else if (ide_devices[drive].idetype == IDE_ATA and (lba + numsects) > ide_devices[drive].size) {
         // 2: Check if inputs are valid:
         return 0x2; // Seeking to invalid position.
     } else {
@@ -400,6 +402,13 @@ pub fn init(dev: kernel.pci.PciDevice) void {
                 ide_devices[count].size = @ptrCast(*const usize, &ide_buf[ATA_IDENT_MAX_LBA]).*;
             }
 
+            kernel.println("120 {x}", ide_buf[120..122]);
+            kernel.println("max_lba = {x}", ide_buf[ATA_IDENT_MAX_LBA .. ATA_IDENT_MAX_LBA + 4]);
+            kernel.println("max_lba = {x}", ide_buf[ATA_IDENT_MAX_LBA]);
+            kernel.println("max_lba = {x}", ide_buf[ATA_IDENT_MAX_LBA + 1]);
+            kernel.println("max_lba = {x}", ide_buf[ATA_IDENT_MAX_LBA + 2]);
+            kernel.println("max_lba = {x}", ide_buf[ATA_IDENT_MAX_LBA + 3]);
+            kernel.println("max_lba = {}", @ptrCast(*const u8, &ide_buf[ATA_IDENT_MAX_LBA]).*);
             // (VIII) String indicates model of device (like Western Digital HDD and SONY DVD-RW...):
             var k: u16 = 0;
             while (k < 40) : (k = k + 2) {
