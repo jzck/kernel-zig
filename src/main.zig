@@ -30,6 +30,14 @@ export fn kmain(magic: u32, info: *const multiboot.MultibootInfo) noreturn {
     _ = task.new(@ptrToInt(topbar)) catch unreachable;
     _ = task.new(@ptrToInt(console.loop)) catch unreachable;
 
+    // driver.ide.blockdev.read(0);
+    // println("{}", driver.ide.sectorbuffer[0]);
+    // println("{}", driver.ide.sectorbuffer[1]);
+    // println("{}", driver.ide.sectorbuffer[2]);
+    // println("{}", driver.ide.sectorbuffer[3]);
+    // println("{}", driver.ide.sectorbuffer[4]);
+    // println("{}", driver.ide.sectorbuffer[5]);
+
     task.terminate();
 }
 

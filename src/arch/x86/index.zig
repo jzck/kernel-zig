@@ -1,6 +1,4 @@
-// std
-pub const std = @import("std");
-pub const assert = std.debug.assert;
+pub usingnamespace @import("../../common.zig");
 
 // from core kernel
 pub const kernel = @import("../../index.zig");

@@ -142,8 +142,20 @@ const Driver = struct {
 };
 
 const Drivers = [_]Driver{
-    Driver{ .name = "virtio-blk", .class = 0x1, .subclass = 0x0, .vendor = 0x1af4, .subsystem = 0x2, .init = virtio.init },
-    Driver{ .name = "ide-ata", .class = 0x1, .subclass = 0x1, .init = ide.init },
+    Driver{
+        .name = "virtio-blk",
+        .class = 0x1,
+        .subclass = 0x0,
+        .vendor = 0x1af4,
+        .subsystem = 0x2,
+        .init = driver.virtio.init,
+    },
+    Driver{
+        .name = "ide-ata",
+        .class = 0x1,
+        .subclass = 0x1,
+        .init = driver.ide.init,
+    },
 };
 
 // TODO: factor 2 functions when anonymous fn is released

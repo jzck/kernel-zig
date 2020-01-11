@@ -1,4 +1,4 @@
-usingnamespace @import("pci.zig");
+usingnamespace @import("index.zig");
 
 const IDE_ATA = 0x00;
 const IDE_ATAPI = 0x01;
@@ -73,7 +73,7 @@ const ATA_IDENT_MAX_LBA_EXT = 200;
 
 const ide_buf: [2048]u8 = [1]u8{0} ** 2048;
 const atapi_packet: [12]u8 = [1]u8{0xA8} ++ [1]u8{0} ** 11;
-const ide_irq_invoked = false;
+var ide_irq_invoked = false;
 
 const IDEDevice = struct {
     reserved: u8, // 0 (Empty) or 1 (This Drive really exists).
@@ -134,66 +134,60 @@ pub inline fn ide_write(channel: u8, comptime reg: u8, data: u8) void {
     }
 }
 
-inline fn ide_polling(channel: u8, advanced_check: bool) ?u8 {
+inline fn ide_polling(channel: u8, comptime advanced_check: bool) ?u8 {
     // (I) Delay 400 nanosecond for BSY to be set:
-    for ([]u8{ 0, 1, 2, 3 }) |_| ide_read(channel, ATA_REG_ALTSTATUS); // wate 100ns per call
-    while (ide_read(channel, ATA_REG_STATUS) & ATA_SR_BSY) {} // Wait for BSY to be zero.
+    for ([_]u8{ 0, 1, 2, 3 }) |_| _ = ide_read(channel, ATA_REG_ALTSTATUS); // wate 100ns per call
+    while (ide_read(channel, ATA_REG_STATUS) & ATA_SR_BSY != 0) {} // Wait for BSY to be zero.
     if (advanced_check) {
         const state = ide_read(channel, ATA_REG_STATUS); // Read Status Register.
-        if (state & ATA_SR_ERR != 0) return 2; // Error.
+        if (state & ATA_SR_ERR != 0) return u8(2); // Error.
         if (state & ATA_SR_DF != 0) return 1; // Device Fault.
         if ((state & ATA_SR_DRQ) == 0) return 3; // DRQ should be set
     }
     return null; // No Error.
 }
 
-fn ide_ata_access(direction: u8, drive: u8, lba: usize, numsects: u8, selector: u16, edi: usize) u8 {
-    var dma: bool = false; // 0: No DMA, 1: DMA
+fn ide_ata_access(direction: u8, drive: u8, lba: u64, numsects: u8, selector: u16, edi: usize) u8 {
+    var dma = false; // 0: No DMA, 1: DMA
     var cmd: u8 = 0;
-    var lba_io: [6]u8 = undefined;
-    const channel: usize = ide_devices[drive].channel; // Read the Channel.
-    const slavebit: usize = ide_devices[drive].drive; // Read the Drive [Master/Slave]
+    var lba_io = [1]u8{0} ** 8;
+    const channel = ide_devices[drive].channel; // Read the Channel.
+    const slavebit = ide_devices[drive].drive; // Read the Drive [Master/Slave]
     const bus: usize = channels[channel].base; // Bus Base, like 0x1F0 which is also data port.
     var words: usize = 256; // Almost every ATA drive has a sector-size of 512-byte.
 
-    ide_irq_invoked = 0;
+    ide_irq_invoked = false;
     channels[channel].nIEN = 0x02;
     ide_write(channel, ATA_REG_CONTROL, channels[channel].nIEN);
 
+    var lba_mode: u8 = undefined;
+    var head: u8 = undefined;
+
     // (I) Select one from LBA28, LBA48 or CHS;
-    if (lba >= 0x10000000) { // Sure Drive should support LBA in this case, or you are
-        // giving a wrong LBA.
+    if (lba >= 0x10000000) {
+        // Sure Drive should support LBA in this case, or you are giving a wrong LBA.
         // LBA48:
-        const lba_mode = 2;
-        lba_io[0] = (lba & 0x000000FF) >> 0;
-        lba_io[1] = (lba & 0x0000FF00) >> 8;
-        lba_io[2] = (lba & 0x00FF0000) >> 16;
-        lba_io[3] = (lba & 0xFF000000) >> 24;
-        lba_io[4] = 0; // LBA28 is integer, so 32-bits are enough to access 2TB.
-        lba_io[5] = 0; // LBA28 is integer, so 32-bits are enough to access 2TB.
+        lba_io = @bitCast([8]u8, lba);
         head = 0; // Lower 4-bits of HDDEVSEL are not used here.
-    } else if (ide_devices[drive].Capabilities & 0x200) { // Drive supports LBA?
+        lba_mode = 2;
+    } else if (ide_devices[drive].capabilities & 0x200 != 0) { // Drive supports LBA?
         // LBA28:
-        const lba_mode = 1;
-        lba_io[0] = (lba & 0x00000FF) >> 0;
-        lba_io[1] = (lba & 0x000FF00) >> 8;
-        lba_io[2] = (lba & 0x0FF0000) >> 16;
-        lba_io[3] = 0; // These Registers are not used here.
-        lba_io[4] = 0; // These Registers are not used here.
-        lba_io[5] = 0; // These Registers are not used here.
-        head = (lba & 0xF000000) >> 24;
+        lba_io = @bitCast([8]u8, lba);
+        assert(lba_io[3] == 0);
+        head = @intCast(u8, (lba & 0xF000000) >> 24);
+        lba_mode = 1;
     } else {
         // CHS:
-        const lba_mode = 0;
-        const sect = (lba % 63) + 1;
+        const sect = @intCast(u8, (lba % 63) + 1);
         const cyl = (lba + 1 - sect) / (16 * 63);
         lba_io[0] = sect;
-        lba_io[1] = (cyl >> 0) & 0xFF;
-        lba_io[2] = (cyl >> 8) & 0xFF;
+        lba_io[1] = @intCast(u8, (cyl >> 0) & 0xFF);
+        lba_io[2] = @intCast(u8, (cyl >> 8) & 0xFF);
         lba_io[3] = 0;
         lba_io[4] = 0;
         lba_io[5] = 0;
-        head = (lba + 1 - sect) % (16 * 63) / (63); // Head number is written to HDDEVSEL lower 4-bits.
+        head = @intCast(u8, (lba + 1 - sect) % (16 * 63) / (63)); // Head number is written to HDDEVSEL lower 4-bits.
+        lba_mode = 0;
     }
 
     // (III) Wait if the drive is busy;
@@ -216,21 +210,22 @@ fn ide_ata_access(direction: u8, drive: u8, lba: usize, numsects: u8, selector: 
     ide_write(channel, ATA_REG_LBA2, lba_io[2]);
 
     // (VI) Select the command and send it;
-    if (lba_mode == 0 and dma == 0 and direction == 0) cmd = ATA_CMD_READ_PIO;
-    if (lba_mode == 1 and dma == 0 and direction == 0) cmd = ATA_CMD_READ_PIO;
-    if (lba_mode == 2 and dma == 0 and direction == 0) cmd = ATA_CMD_READ_PIO_EXT;
-    if (lba_mode == 0 and dma == 1 and direction == 0) cmd = ATA_CMD_READ_DMA;
-    if (lba_mode == 1 and dma == 1 and direction == 0) cmd = ATA_CMD_READ_DMA;
-    if (lba_mode == 2 and dma == 1 and direction == 0) cmd = ATA_CMD_READ_DMA_EXT;
-    if (lba_mode == 0 and dma == 0 and direction == 1) cmd = ATA_CMD_WRITE_PIO;
-    if (lba_mode == 1 and dma == 0 and direction == 1) cmd = ATA_CMD_WRITE_PIO;
-    if (lba_mode == 2 and dma == 0 and direction == 1) cmd = ATA_CMD_WRITE_PIO_EXT;
-    if (lba_mode == 0 and dma == 1 and direction == 1) cmd = ATA_CMD_WRITE_DMA;
-    if (lba_mode == 1 and dma == 1 and direction == 1) cmd = ATA_CMD_WRITE_DMA;
-    if (lba_mode == 2 and dma == 1 and direction == 1) cmd = ATA_CMD_WRITE_DMA_EXT;
+    if (lba_mode == 0 and direction == 0 and !dma) cmd = ATA_CMD_READ_PIO;
+    if (lba_mode == 1 and direction == 0 and !dma) cmd = ATA_CMD_READ_PIO;
+    if (lba_mode == 2 and direction == 0 and !dma) cmd = ATA_CMD_READ_PIO_EXT;
+    if (lba_mode == 0 and direction == 0 and dma) cmd = ATA_CMD_READ_DMA;
+    if (lba_mode == 1 and direction == 0 and dma) cmd = ATA_CMD_READ_DMA;
+    if (lba_mode == 2 and direction == 0 and dma) cmd = ATA_CMD_READ_DMA_EXT;
+    if (lba_mode == 0 and direction == 1 and !dma) cmd = ATA_CMD_WRITE_PIO;
+    if (lba_mode == 1 and direction == 1 and !dma) cmd = ATA_CMD_WRITE_PIO;
+    if (lba_mode == 2 and direction == 1 and !dma) cmd = ATA_CMD_WRITE_PIO_EXT;
+    if (lba_mode == 0 and direction == 1 and dma) cmd = ATA_CMD_WRITE_DMA;
+    if (lba_mode == 1 and direction == 1 and dma) cmd = ATA_CMD_WRITE_DMA;
+    if (lba_mode == 2 and direction == 1 and dma) cmd = ATA_CMD_WRITE_DMA_EXT;
     ide_write(channel, ATA_REG_COMMAND, cmd); // Send the Command.
 
     if (dma) {
+        //TODO: dma
         // if (direction == 0);
         //    // DMA Read.
         // else;
@@ -238,84 +233,94 @@ fn ide_ata_access(direction: u8, drive: u8, lba: usize, numsects: u8, selector: 
     }
     if (!dma and direction == 0) {
         // PIO Read.
-        var i = 0;
+        var i: u8 = 0;
+        var iedi = edi;
         while (i < numsects) : (i = i + 1) {
-            if (ide_polling(channel, 1)) |err| return err; // Polling, set error and exit if there is.
-            asm volatile ("pushw %es");
-            asm volatile ("mov %%ax, %%es"
+            iedi = edi + i * (words * 2);
+            if (ide_polling(channel, true)) |err| return err; // Polling, set error and exit if there is.
+            asm volatile ("pushw %%es");
+            asm volatile ("mov %[a], %%es"
                 :
-                : [selector] "a" (selector)
+                : [a] "{eax}" (selector)
             );
             asm volatile ("rep insw"
                 :
-                : [words] "c" (words),
-                  [bus] "d" (bus),
-                  [edi] "D" (edi)
+                : [words] "{ecx}" (words),
+                  [bus] "{dx}" (bus),
+                  [iedi] "{edi}" (iedi)
             ); // Receive Data.
-            asm volatile ("popw %es");
-            edi += (words * 2);
+            asm volatile ("popw %%es");
         }
     }
     if (!dma and direction == 1) {
         // PIO Write.
-        var i = 0;
+        var i: u8 = 0;
+        var iedi = edi;
         while (i < numsects) : (i = i + 1) {
-            ide_polling(channel, 0); // Polling.
-            asm volatile ("pushw %ds");
+            iedi = edi + i * (words * 2);
+            _ = ide_polling(channel, false); // Polling.
+            asm volatile ("pushw %%ds");
             asm volatile ("mov %%ax, %%ds"
                 :
-                : [selector] "a" (selector)
+                : [selector] "{eax}" (selector)
             );
             asm volatile ("rep outsw"
                 :
-                : [words] "c" (words),
-                  [bus] "d" (bus),
-                  [edi] "S" (edi)
+                : [words] "{ecx}" (words),
+                  [bus] "{dx}" (bus),
+                  [iedi] "{esi}" (iedi)
             ); // Send Data
-            asm volatile ("popw %ds");
-            edi += (words * 2);
+            asm volatile ("popw %%ds");
         }
         if (lba_mode == 2) ide_write(channel, ATA_REG_COMMAND, ATA_CMD_CACHE_FLUSH_EXT);
         if (lba_mode != 2) ide_write(channel, ATA_REG_COMMAND, ATA_CMD_CACHE_FLUSH);
-        ide_polling(channel, 0); // Polling.
+        _ = ide_polling(channel, true); // Polling.
     }
 
     return 0;
 }
 
-fn ide_read_sectors(drive: u8, numsects: u8, lba: usize, es: u8, edi: usize) void {
+pub const blockdev = kernel.bio.BlockDev{ .read = ide_block_read };
+pub const sectorbuffer = [1]u8{0} ** 512;
+pub fn ide_block_read(lba: u64) void {
+    _ = ide_read_sectors(0, 1, lba, 0x8, @ptrToInt(&sectorbuffer[0]));
+}
+
+pub fn ide_read_sectors(drive: u8, numsects: u8, lba: u64, es: u8, edi: usize) u8 {
     // 1: Check if the drive presents:
     if (drive > 3 or ide_devices[drive].reserved == 0) {
-        package[0] = 0x1; // Drive Not Found!
+        return 0x1; // Drive Not Found!
     } else if (((lba + numsects) > ide_devices[drive].size) and (ide_devices[drive].idetype == IDE_ATA)) {
         // 2: Check if inputs are valid:
-        package[0] = 0x2; // Seeking to invalid position.
+        return 0x2; // Seeking to invalid position.
     } else {
         // 3: Read in PIO Mode through Polling & IRQs:
-        var err: u8;
+        var err: u8 = 0;
         if (ide_devices[drive].idetype == IDE_ATA) {
             err = ide_ata_access(ATA_READ, drive, lba, numsects, es, edi);
-        } else if (ide_devices[drive].ideype == IDE_ATAPI) {
-            var i = 0;
+        } else if (ide_devices[drive].idetype == IDE_ATAPI) {
+            var i: u8 = 0;
             while (i < numsects) : (i = i + 1) {
-                err = ide_atapi_read(drive, lba + i, 1, es, edi + (i * 2048));
+                // err = ide_atapi_read(drive, lba + i, 1, es, edi + (i * 2048));
             }
         }
-        package[0] = ide_print_error(drive, err);
+        // ide_print_error(drive, err);
+        return err;
     }
 }
 
-pub fn init(dev: PciDevice) void {
-    println("-- ide init --");
-    print("[ide] ");
+pub fn init(dev: kernel.pci.PciDevice) void {
+    kernel.println("-- ide init --");
+    kernel.print("[ide] ");
     dev.format();
     assert(dev.header_type() == 0x0); // mass storage device
 
     dev.config_write(@intCast(u8, 0xfe), 0x3c);
     if (dev.intr_line() == 0xfe) {
-        println("[ide] needs IRQ assignement");
+        kernel.println("[ide] detected ATA device");
     } else {
-        println("The device doesn't use IRQs");
+        kernel.println("Potential SATA device, aborting.");
+        x86.hang();
     }
 
     const BAR0 = @intCast(u16, dev.bar(0));
@@ -345,11 +350,11 @@ pub fn init(dev: PciDevice) void {
 
             // (I) Select Drive:
             ide_write(i, ATA_REG_HDDEVSEL, 0xA0 | (j << 4)); // Select Drive.
-            task.usleep(1000) catch unreachable; // Wait 1ms for drive select to work.
+            kernel.task.usleep(1000) catch unreachable; // Wait 1ms for drive select to work.
 
             // (II) Send ATA Identify Command:
             ide_write(i, ATA_REG_COMMAND, ATA_CMD_IDENTIFY);
-            task.usleep(1000) catch unreachable;
+            kernel.task.usleep(1000) catch unreachable;
 
             if (ide_read(i, ATA_REG_STATUS) == 0) continue; // If Status = 0, No Device.
             while (true) {
@@ -372,7 +377,7 @@ pub fn init(dev: PciDevice) void {
                 if (idetype != IDE_ATAPI) continue; // Unknown Type (may not be a device).
 
                 ide_write(i, ATA_REG_COMMAND, ATA_CMD_IDENTIFY_PACKET);
-                task.usleep(1000) catch unreachable;
+                kernel.task.usleep(1000) catch unreachable;
             }
 
             // (V) Read Identification Space of the Device:
@@ -409,8 +414,9 @@ pub fn init(dev: PciDevice) void {
     // 4- Print Summary:
     for ([_]u8{ 0, 1, 2, 3 }) |i| {
         if (ide_devices[i].reserved == 1) {
-            println(
-                "[ide] found {} Drive {}GB - {}",
+            kernel.println(
+                "[ide] drive {} {} ({}GB) - {}",
+                i,
                 if (ide_devices[i].idetype == 0) "ATA" else "ATAPI",
                 ide_devices[i].size,
                 ide_devices[i].model,
