@@ -69,6 +69,7 @@ pub fn initialize() void {
 
 fn general_protection_fault() void {
     kernel.println("general protection fault");
+    hang();
 }
 
 fn debug_trap() void {
@@ -83,5 +84,5 @@ fn page_fault() void {
     kernel.println("pde: 0x{x} ({})", paging.pde(vaddr), vaddr >> 22);
     kernel.println("pte: 0x{x} ({})", paging.pte(vaddr), vaddr >> 12);
     // paging.format();
-    while (true) asm volatile ("hlt");
+    hang();
 }

@@ -30,13 +30,9 @@ export fn kmain(magic: u32, info: *const multiboot.MultibootInfo) noreturn {
     _ = task.new(@ptrToInt(topbar)) catch unreachable;
     _ = task.new(@ptrToInt(console.loop)) catch unreachable;
 
-    var i: u16 = 0;
-    var sum: u64 = 0;
-    driver.ide.blockdev.read(2);
-    while (i < 512) : (i += 1) {
-        sum += driver.ide.sectorbuffer[i];
-    }
-    println("sum: {}", sum);
+    var buf = [1]u8{0} ** 512;
+    driver.ide.blockdev.read(1, &buf);
+    println("sblock: {x}", buf);
 
     task.terminate();
 }

@@ -158,7 +158,7 @@ const Drivers = [_]Driver{
     },
 };
 
-// TODO: factor 2 functions when anonymous fn is released
+// TODO: factor 2 functions with a closure or a generator when released
 pub fn scan() void {
     var slot: u5 = 0;
     // 0..31

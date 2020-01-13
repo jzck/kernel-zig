@@ -71,7 +71,7 @@ const ATA_IDENT_MAX_LBA = 120;
 const ATA_IDENT_COMMANDSETS = 164;
 const ATA_IDENT_MAX_LBA_EXT = 200;
 
-const ide_buf: [2048]u8 = [1]u8{0} ** 2048;
+var ide_buf: [2048]u8 = [1]u8{0} ** 2048;
 const atapi_packet: [12]u8 = [1]u8{0xA8} ++ [1]u8{0} ** 11;
 var ide_irq_invoked = false;
 
@@ -134,20 +134,21 @@ pub inline fn ide_write(channel: u8, comptime reg: u8, data: u8) void {
     }
 }
 
-inline fn ide_polling(channel: u8, comptime advanced_check: bool) ?u8 {
-    // (I) Delay 400 nanosecond for BSY to be set:
+inline fn ide_poll(channel: u8) void {
     for ([_]u8{ 0, 1, 2, 3 }) |_| _ = ide_read(channel, ATA_REG_ALTSTATUS); // wate 100ns per call
     while (ide_read(channel, ATA_REG_STATUS) & ATA_SR_BSY != 0) {} // Wait for BSY to be zero.
-    if (advanced_check) {
-        const state = ide_read(channel, ATA_REG_STATUS); // Read Status Register.
-        if (state & ATA_SR_ERR != 0) return u8(2); // Error.
-        if (state & ATA_SR_DF != 0) return 1; // Device Fault.
-        if ((state & ATA_SR_DRQ) == 0) return 3; // DRQ should be set
-    }
-    return null; // No Error.
 }
 
-fn ide_ata_access(direction: u8, drive: u8, lba: u64, numsects: u8, selector: u16, edi: usize) u8 {
+inline fn ide_poll_check(channel: u8) !void {
+    // (I) Delay 400 nanosecond for BSY to be set:
+    ide_poll(channel);
+    const state = ide_read(channel, ATA_REG_STATUS); // Read Status Register.
+    if (state & ATA_SR_ERR != 0) return error.ATAStatusReg; // Error.
+    if (state & ATA_SR_DF != 0) return error.ATADeviceFault; // Device Fault.
+    if ((state & ATA_SR_DRQ) == 0) return error.ATANoDRQ; // DRQ should be set
+}
+
+fn ide_ata_access(direction: u8, drive: u8, lba: u64, numsects: u8, selector: u16, edi: usize) !void {
     var dma = false; // 0: No DMA, 1: DMA
     var cmd: u8 = 0;
     var lba_io = [1]u8{0} ** 8;
@@ -189,7 +190,6 @@ fn ide_ata_access(direction: u8, drive: u8, lba: u64, numsects: u8, selector: u1
         head = @intCast(u8, (lba + 1 - sect) % (16 * 63) / (63)); // Head number is written to HDDEVSEL lower 4-bits.
         lba_mode = 0;
     }
-    kernel.println("lba_mode {}", lba_mode);
 
     // (III) Wait if the drive is busy;
     while (ide_read(channel, ATA_REG_STATUS) & ATA_SR_BSY != 0) {} // Wait if busy.)
@@ -235,15 +235,14 @@ fn ide_ata_access(direction: u8, drive: u8, lba: u64, numsects: u8, selector: u1
     if (!dma and direction == 0) {
         // PIO Read.
         var i: u8 = 0;
-        var iedi = edi;
         while (i < numsects) : (i = i + 1) {
-            iedi = edi + i * (words * 2);
-            if (ide_polling(channel, true)) |err| return err; // Polling, set error and exit if there is.
+            var iedi = edi + i * (words * 2);
+            try ide_poll_check(channel); // Polling, set error and exit if there is.
             asm volatile ("pushw %%es");
-            asm volatile ("mov %[a], %%es"
-                :
-                : [a] "{eax}" (selector)
-            );
+            // asm volatile ("mov %[a], %%es"
+            //     :
+            //     : [a] "{eax}" (selector)
+            // );
             asm volatile ("rep insw"
                 :
                 : [words] "{ecx}" (words),
@@ -259,7 +258,7 @@ fn ide_ata_access(direction: u8, drive: u8, lba: u64, numsects: u8, selector: u1
         var iedi = edi;
         while (i < numsects) : (i = i + 1) {
             iedi = edi + i * (words * 2);
-            _ = ide_polling(channel, false); // Polling.
+            ide_poll(channel); // Polling.
             asm volatile ("pushw %%ds");
             asm volatile ("mov %%ax, %%ds"
                 :
@@ -275,39 +274,36 @@ fn ide_ata_access(direction: u8, drive: u8, lba: u64, numsects: u8, selector: u1
         }
         if (lba_mode == 2) ide_write(channel, ATA_REG_COMMAND, ATA_CMD_CACHE_FLUSH_EXT);
         if (lba_mode != 2) ide_write(channel, ATA_REG_COMMAND, ATA_CMD_CACHE_FLUSH);
-        _ = ide_polling(channel, true); // Polling.
+        try ide_poll_check(channel); // Polling.
     }
-
-    return 0;
 }
 
-pub const blockdev = kernel.bio.BlockDev{ .read = ide_block_read };
-pub const sectorbuffer = [1]u8{0} ** 512;
-pub fn ide_block_read(lba: u64) void {
-    const a = ide_read_sectors(0, 1, lba, 0x8, @ptrToInt(&sectorbuffer[0]));
-    if (a != 0) kernel.println("ide_read_sectors failed {}", a);
+pub const blockdev = kernel.bio.BlockDev(512){
+    .read = ide_block_read,
+    .write = null,
+};
+pub fn ide_block_read(lba: u64, buf: *[512]u8) void {
+    return ide_read_sectors(0, 1, lba, 0x10, @ptrToInt(buf)) catch unreachable;
 }
 
-pub fn ide_read_sectors(drive: u2, numsects: u8, lba: u64, es: u8, edi: usize) u8 {
+pub fn ide_read_sectors(drive: u2, numsects: u8, lba: u64, es: u8, edi: usize) !void {
     // 1: Check if the drive presents:
     if (ide_devices[drive].reserved == 0) {
-        return 0x1; // Drive Not Found!
+        return error.DriveNotFound; // Drive Not Found!
     } else if (ide_devices[drive].idetype == IDE_ATA and (lba + numsects) > ide_devices[drive].size) {
         // 2: Check if inputs are valid:
-        return 0x2; // Seeking to invalid position.
+        return error.InvalidSeek; // Seeking to invalid position.
     } else {
         // 3: Read in PIO Mode through Polling & IRQs:
-        var err: u8 = 0;
         if (ide_devices[drive].idetype == IDE_ATA) {
-            err = ide_ata_access(ATA_READ, drive, lba, numsects, es, edi);
+            try ide_ata_access(ATA_READ, drive, lba, numsects, es, edi);
         } else if (ide_devices[drive].idetype == IDE_ATAPI) {
-            var i: u8 = 0;
-            while (i < numsects) : (i = i + 1) {
-                // err = ide_atapi_read(drive, lba + i, 1, es, edi + (i * 2048));
-            }
+            return error.ATAPINotImplemented;
+            // var i: u8 = 0;
+            // while (i < numsects) : (i = i + 1) {
+            //     // err = ide_atapi_read(drive, lba + i, 1, es, edi + (i * 2048));
+            // }
         }
-        // ide_print_error(drive, err);
-        return err;
     }
 }
 
@@ -402,13 +398,6 @@ pub fn init(dev: kernel.pci.PciDevice) void {
                 ide_devices[count].size = @ptrCast(*const usize, &ide_buf[ATA_IDENT_MAX_LBA]).*;
             }
 
-            kernel.println("120 {x}", ide_buf[120..122]);
-            kernel.println("max_lba = {x}", ide_buf[ATA_IDENT_MAX_LBA .. ATA_IDENT_MAX_LBA + 4]);
-            kernel.println("max_lba = {x}", ide_buf[ATA_IDENT_MAX_LBA]);
-            kernel.println("max_lba = {x}", ide_buf[ATA_IDENT_MAX_LBA + 1]);
-            kernel.println("max_lba = {x}", ide_buf[ATA_IDENT_MAX_LBA + 2]);
-            kernel.println("max_lba = {x}", ide_buf[ATA_IDENT_MAX_LBA + 3]);
-            kernel.println("max_lba = {}", @ptrCast(*const u8, &ide_buf[ATA_IDENT_MAX_LBA]).*);
             // (VIII) String indicates model of device (like Western Digital HDD and SONY DVD-RW...):
             var k: u16 = 0;
             while (k < 40) : (k = k + 2) {
@@ -424,10 +413,10 @@ pub fn init(dev: kernel.pci.PciDevice) void {
     for ([_]u8{ 0, 1, 2, 3 }) |i| {
         if (ide_devices[i].reserved == 1) {
             kernel.println(
-                "[ide] drive {} {} ({}GB) - {}",
+                "[ide] drive {} {} ({}MB) - {}",
                 i,
                 if (ide_devices[i].idetype == 0) "ATA" else "ATAPI",
-                ide_devices[i].size,
+                ide_devices[i].size * 512 / 1024 / 1024,
                 ide_devices[i].model,
             );
         }
