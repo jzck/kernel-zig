@@ -15,6 +15,7 @@ export const multiboot_header align(4) linksection(".multiboot") = multiboot: {
     };
 };
 
+var buf = [1]u8{0} ** 512;
 // arch independant initialization
 export fn kmain(magic: u32, info: *const multiboot.MultibootInfo) noreturn {
     assert(magic == multiboot.MULTIBOOT_BOOTLOADER_MAGIC);
@@ -30,8 +31,9 @@ export fn kmain(magic: u32, info: *const multiboot.MultibootInfo) noreturn {
     _ = task.new(@ptrToInt(topbar)) catch unreachable;
     _ = task.new(@ptrToInt(console.loop)) catch unreachable;
 
-    var buf = [1]u8{0} ** 512;
-    driver.ide.blockdev.read(1, &buf);
+    // var buf = vmem.create([512]u8) catch unreachable;
+    println("buf at 0x{x}", @ptrToInt(&buf));
+    driver.ide.first_ide_drive.read(2, &buf);
     println("sblock: {x}", buf);
 
     task.terminate();

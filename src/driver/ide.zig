@@ -71,13 +71,13 @@ const ATA_IDENT_MAX_LBA = 120;
 const ATA_IDENT_COMMANDSETS = 164;
 const ATA_IDENT_MAX_LBA_EXT = 200;
 
-var ide_buf: [2048]u8 = [1]u8{0} ** 2048;
 const atapi_packet: [12]u8 = [1]u8{0xA8} ++ [1]u8{0} ** 11;
 var ide_irq_invoked = false;
+var ide_buf: [2048]u8 = [1]u8{0} ** 2048;
 
 const IDEDevice = struct {
     reserved: u8, // 0 (Empty) or 1 (This Drive really exists).
-    channel: u8, // 0 (Primary Channel) or 1 (Secondary Channel).
+    channel: IDEChannelRegister,
     drive: u8, // 0 (Master Drive) or 1 (Slave Drive).
     idetype: u16, // 0: ATA, 1:ATAPI.
     signature: u16, // Drive Signature
@@ -85,9 +85,293 @@ const IDEDevice = struct {
     commandsets: usize, // Command Sets Supported.
     size: usize, // Size in Sectors.
     model: [41]u8, // Model in string.
+
+    pub fn init(channel: IDEChannelRegister, drive: u8) !?*IDEDevice {
+        var idetype: u8 = IDE_ATA;
+        var err: u8 = 0;
+        var status: u8 = 0;
+
+        var self = try kernel.vmem.create(IDEDevice);
+        errdefer kernel.vmem.destroy(self);
+        self.reserved = 1;
+        self.channel = channel;
+        self.drive = drive;
+
+        // (0) Turn off irqs
+        self.write(ATA_REG_CONTROL, 2);
+
+        // (I) Select Drive:
+        self.write(ATA_REG_HDDEVSEL, 0xA0 | (drive << 4)); // Select Drive.
+        try kernel.task.usleep(1000); // Wait 1ms for drive select to work.
+
+        // (II) Send ATA Identify Command:
+        self.write(ATA_REG_COMMAND, ATA_CMD_IDENTIFY);
+        try kernel.task.usleep(1000);
+
+        if (self.read(ATA_REG_STATUS) == 0) return null; // If Status = 0, No Device.
+
+        while (true) {
+            status = self.read(ATA_REG_STATUS);
+            if (status & ATA_SR_ERR != 0) {
+                err = 1;
+                break;
+            } // If Err, Device is not ATA.
+            if ((status & ATA_SR_BSY == 0) and (status & ATA_SR_DRQ != 0)) break; // Everything is right.
+        }
+
+        // (IV) Probe for ATAPI Devices:)
+        if (err != 0) {
+            // Device is not ATA
+            const cl = self.read(ATA_REG_LBA1);
+            const ch = self.read(ATA_REG_LBA2);
+
+            if (cl == 0x14 and ch == 0xEB) idetype = IDE_ATAPI;
+            if (cl == 0x69 and ch == 0x96) idetype = IDE_ATAPI;
+            if (idetype != IDE_ATAPI) {
+                return null; // Unknown Type (may not be a device).
+            }
+
+            self.write(ATA_REG_COMMAND, ATA_CMD_IDENTIFY_PACKET);
+            try kernel.task.usleep(1000);
+        }
+        self.idetype = idetype;
+
+        // (V) Read Identification Space of the Device:
+        self.read_buffer(ATA_REG_DATA, &ide_buf, 128);
+        self.signature = @ptrCast(*const u8, &ide_buf[ATA_IDENT_DEVICETYPE]).*;
+        self.capabilities = @ptrCast(*const u8, &ide_buf[ATA_IDENT_CAPABILITIES]).*;
+        self.commandsets = @ptrCast(*const usize, &ide_buf[ATA_IDENT_COMMANDSETS]).*;
+
+        // (VII) Get Size:
+        if (self.commandsets & (1 << 26) != 0) {
+            // Device uses 48-Bit Addressing:
+            self.size = @ptrCast(*const usize, &ide_buf[ATA_IDENT_MAX_LBA_EXT]).*;
+        } else {
+            // Device uses CHS or 28-bit Addressing:
+            self.size = @ptrCast(*const usize, &ide_buf[ATA_IDENT_MAX_LBA]).*;
+        }
+        // (VIII) String indicates model of device (like Western Digital HDD and SONY DVD-RW...):
+        var k: u16 = 0;
+        while (k < 40) : (k = k + 2) {
+            self.model[k] = ide_buf[ATA_IDENT_MODEL + k + 1];
+            self.model[k + 1] = ide_buf[ATA_IDENT_MODEL + k];
+        }
+        self.model[40] = 0; // Terminate String.
+        self.format();
+        return self;
+    }
+
+    inline fn poll(self: IDEDevice) void {
+        for ([_]u8{ 0, 1, 2, 3 }) |_| _ = self.read(ATA_REG_ALTSTATUS); // wait 100ns per call
+        while (self.read(ATA_REG_STATUS) & ATA_SR_BSY != 0) {} // Wait for BSY to be zero.
+    }
+    inline fn poll_check(self: IDEDevice) !void {
+        // (I) Delay 400 nanosecond for BSY to be set:
+        self.poll();
+        const state = self.read(ATA_REG_STATUS); // Read Status Register.
+        if (state & ATA_SR_ERR != 0) return error.ATAStatusReg; // Error.
+        if (state & ATA_SR_DF != 0) return error.ATADeviceFault; // Device Fault.
+        if ((state & ATA_SR_DRQ) == 0) return error.ATANoDRQ; // DRQ should be set
+    }
+
+    pub inline fn read(self: IDEDevice, comptime reg: u8) u8 {
+        if (reg > 0x07 and reg < 0x0C) self.write(ATA_REG_CONTROL, 0x80 | self.channel.nIEN);
+        defer if (reg > 0x07 and reg < 0x0C) self.write(ATA_REG_CONTROL, self.channel.nIEN);
+        return switch (reg) {
+            0x0...0x7 => x86.inb(self.channel.base + reg - 0x0),
+            0x8...0xb => x86.inb(self.channel.base + reg - 0x6),
+            0xc...0xd => x86.inb(self.channel.ctrl + reg - 0xa),
+            0xe...0x16 => x86.inb(self.channel.bmide + reg - 0xe),
+            else => @compileError("bad IDE register."),
+        };
+    }
+    pub inline fn read_buffer(self: IDEDevice, comptime reg: u8, buf: var, cnt: usize) void {
+        if (reg > 0x07 and reg < 0x0C) self.write(ATA_REG_CONTROL, 0x80 | self.channel.nIEN);
+        defer if (reg > 0x07 and reg < 0x0C) self.write(ATA_REG_CONTROL, self.channel.nIEN);
+        switch (reg) {
+            0x0...0x7 => x86.insl(self.channel.base + reg - 0x0, buf, cnt),
+            0x8...0xb => x86.insl(self.channel.base + reg - 0x6, buf, cnt),
+            0xc...0xd => x86.insl(self.channel.ctrl + reg - 0xa, buf, cnt),
+            0xe...0x16 => x86.insl(self.channel.bmide + reg - 0xe, buf, cnt),
+            else => @compileError("bad IDE register."),
+        }
+    }
+    pub inline fn write(self: IDEDevice, comptime reg: u8, data: u8) void {
+        if (reg > 0x07 and reg < 0x0C) self.write(ATA_REG_CONTROL, 0x80 | self.channel.nIEN);
+        defer if (reg > 0x07 and reg < 0x0C) self.write(ATA_REG_CONTROL, self.channel.nIEN);
+        switch (reg) {
+            0x0...0x7 => x86.outb(self.channel.base + reg - 0x0, data),
+            0x8...0xb => x86.outb(self.channel.base + reg - 0x6, data),
+            0xc...0xd => x86.outb(self.channel.ctrl + reg - 0xa, data),
+            0xe...0x16 => x86.outb(self.channel.bmide + reg - 0xe, data),
+            else => @compileError("bad IDE register."),
+        }
+    }
+
+    pub fn read_sectors(self: IDEDevice, numsects: u8, lba: u64, selector: u8, buf: usize) !void {
+        // 1: Check if the drive presents:
+        if (self.reserved == 0) {
+            return error.DriveNotFound; // Drive Not Found!
+        } else if (self.idetype == IDE_ATA and (lba + numsects) > self.size) {
+            // 2: Check if inputs are valid:
+            return error.InvalidSeek; // Seeking to invalid position.
+        } else {
+            // 3: Read in PIO Mode through Polling & IRQs:
+            if (self.idetype == IDE_ATA) {
+                try self.ata_access(ATA_READ, lba, numsects, selector, buf);
+            } else if (self.idetype == IDE_ATAPI) {
+                return error.ATAPINotImplemented;
+                // var i: u8 = 0;
+                // while (i < numsects) : (i = i + 1) {
+                //     // err = ide_atapi_read(drive, lba + i, 1, selector, buf + (i * 2048));
+                // }
+            }
+        }
+    }
+
+    pub fn format(self: IDEDevice) void {
+        kernel.println(
+            "[ide] {} drive ({}MB) - {}",
+            if (self.idetype == 0) "ATA" else "ATAPI",
+            self.size * 512 / 1024 / 1024,
+            self.model,
+        );
+    }
+
+    fn ata_access(self: IDEDevice, direction: u8, lba: u64, numsects: u8, selector: u16, buf: usize) !void {
+        var dma = false; // 0: No DMA, 1: DMA
+        var cmd: u8 = 0;
+        var lba_io = [1]u8{0} ** 8;
+        const bus: u16 = self.channel.base; // Bus Base, like 0x1F0 which is also data port.
+        const words: usize = 256; // Almost every ATA drive has a sector-size of 512-byte.
+
+        ide_irq_invoked = false;
+        self.write(ATA_REG_CONTROL, 2); // disable IRQa
+
+        var lba_mode: u8 = undefined;
+        var head: u8 = undefined;
+
+        // (I) Select one from LBA28, LBA48 or CHS;
+        if (lba >= 0x10000000) {
+            // Sure Drive should support LBA in this case, or you are giving a wrong LBA.
+            // LBA48:
+            lba_io = @bitCast([8]u8, lba);
+            head = 0; // Lower 4-bits of HDDEVSEL are not used here.
+            lba_mode = 2;
+        } else if (self.capabilities & 0x200 != 0) { // Drive supports LBA?
+            // LBA28:
+            lba_io = @bitCast([8]u8, lba);
+            assert(lba_io[3] == 0);
+            head = @intCast(u8, (lba & 0xF000000) >> 24);
+            lba_mode = 1;
+        } else {
+            // CHS:
+            const sect = @intCast(u8, (lba % 63) + 1);
+            const cyl = (lba + 1 - sect) / (16 * 63);
+            lba_io[0] = sect;
+            lba_io[1] = @intCast(u8, (cyl >> 0) & 0xFF);
+            lba_io[2] = @intCast(u8, (cyl >> 8) & 0xFF);
+            lba_io[3] = 0;
+            lba_io[4] = 0;
+            lba_io[5] = 0;
+            head = @intCast(u8, (lba + 1 - sect) % (16 * 63) / (63)); // Head number is written to HDDEVSEL lower 4-bits.
+            lba_mode = 0;
+        }
+
+        // (III) Wait if the drive is busy;
+        while (self.read(ATA_REG_STATUS) & ATA_SR_BSY != 0) {} // Wait if busy.)
+
+        // (IV) Select Drive from the controller;
+        if (lba_mode == 0) self.write(ATA_REG_HDDEVSEL, 0xA0 | (self.drive << 4) | head); // Drive & CHS.
+        if (lba_mode != 0) self.write(ATA_REG_HDDEVSEL, 0xE0 | (self.drive << 4) | head); // Drive & LBA
+
+        // (V) Write Parameters;
+        if (lba_mode == 2) {
+            self.write(ATA_REG_SECCOUNT1, 0);
+            self.write(ATA_REG_LBA3, lba_io[3]);
+            self.write(ATA_REG_LBA4, lba_io[4]);
+            self.write(ATA_REG_LBA5, lba_io[5]);
+        }
+        self.write(ATA_REG_SECCOUNT0, numsects);
+        self.write(ATA_REG_LBA0, lba_io[0]);
+        self.write(ATA_REG_LBA1, lba_io[1]);
+        self.write(ATA_REG_LBA2, lba_io[2]);
+
+        // (VI) Select the command and send it;
+        if (lba_mode == 0 and direction == 0 and !dma) cmd = ATA_CMD_READ_PIO;
+        if (lba_mode == 1 and direction == 0 and !dma) cmd = ATA_CMD_READ_PIO;
+        if (lba_mode == 2 and direction == 0 and !dma) cmd = ATA_CMD_READ_PIO_EXT;
+        if (lba_mode == 0 and direction == 0 and dma) cmd = ATA_CMD_READ_DMA;
+        if (lba_mode == 1 and direction == 0 and dma) cmd = ATA_CMD_READ_DMA;
+        if (lba_mode == 2 and direction == 0 and dma) cmd = ATA_CMD_READ_DMA_EXT;
+        if (lba_mode == 0 and direction == 1 and !dma) cmd = ATA_CMD_WRITE_PIO;
+        if (lba_mode == 1 and direction == 1 and !dma) cmd = ATA_CMD_WRITE_PIO;
+        if (lba_mode == 2 and direction == 1 and !dma) cmd = ATA_CMD_WRITE_PIO_EXT;
+        if (lba_mode == 0 and direction == 1 and dma) cmd = ATA_CMD_WRITE_DMA;
+        if (lba_mode == 1 and direction == 1 and dma) cmd = ATA_CMD_WRITE_DMA;
+        if (lba_mode == 2 and direction == 1 and dma) cmd = ATA_CMD_WRITE_DMA_EXT;
+        self.write(ATA_REG_COMMAND, cmd); // Send the Command.
+
+        if (dma) {
+            //TODO: dma
+            // if (direction == 0);
+            //    // DMA Read.
+            // else;
+            //    // DMA Write.
+        }
+        if (!dma and direction == 0) {
+            // PIO Read.
+            kernel.println("pio read");
+            var i: u8 = 0;
+            while (i < numsects) : (i = i + 1) {
+                var iedi = buf + i * (words * 2);
+                try self.poll_check(); // Polling, set error and exit if there is.
+                asm volatile ("pushw %%es");
+                asm volatile ("mov %[a], %%es"
+                    :
+                    : [a] "{eax}" (selector)
+                );
+                x86.insl(bus, iedi, words / 2);
+                // asm volatile ("cld; rep; insw"
+                //     : [iedi] "={edi}" (iedi),
+                //       [words] "={ecx}" (words)
+                //     : [bus] "{dx}" (bus),
+                //       [iedi] "0" (iedi),
+                //       [words] "1" (words)
+                //     : "memory", "cc"
+                // );
+                asm volatile ("popw %%es");
+            }
+        }
+        if (!dma and direction == 1) {
+            // PIO Write.
+            var i: u8 = 0;
+            while (i < numsects) : (i = i + 1) {
+                var iedi = buf + i * (words * 2);
+                self.poll(); // Polling.
+                asm volatile ("pushw %%ds");
+                asm volatile ("mov %%ax, %%ds"
+                    : [selector] "={eax}" (selector)
+                );
+                asm volatile ("rep outsw"
+                    :
+                    : [words] "{ecx}" (words),
+                      [bus] "{dx}" (bus),
+                      [iedi] "{esi}" (iedi)
+                ); // Send Data
+                asm volatile ("popw %%ds");
+            }
+            if (lba_mode == 2) self.write(ATA_REG_COMMAND, ATA_CMD_CACHE_FLUSH_EXT);
+            if (lba_mode != 2) self.write(ATA_REG_COMMAND, ATA_CMD_CACHE_FLUSH);
+            try self.poll_check(); // Polling.
+        }
+    }
 };
 
-var ide_devices: [4]IDEDevice = undefined;
+var ide_device_0: ?*IDEDevice = null;
+var ide_device_1: ?*IDEDevice = null;
+var ide_device_2: ?*IDEDevice = null;
+var ide_device_3: ?*IDEDevice = null;
 
 const IDEChannelRegister = struct {
     base: u16, // I/O Base.
@@ -96,215 +380,15 @@ const IDEChannelRegister = struct {
     nIEN: u8, // nIEN (No Interrupt);
 };
 
-var channels: [2]IDEChannelRegister = undefined;
-
-pub inline fn ide_read(channel: u8, comptime reg: u8) u8 {
-    if (reg > 0x07 and reg < 0x0C) ide_write(channel, ATA_REG_CONTROL, 0x80 | channels[channel].nIEN);
-    defer if (reg > 0x07 and reg < 0x0C) ide_write(channel, ATA_REG_CONTROL, channels[channel].nIEN);
-    return switch (reg) {
-        0x0...0x7 => x86.inb(channels[channel].base + reg - 0x0),
-        0x8...0xb => x86.inb(channels[channel].base + reg - 0x6),
-        0xc...0xd => x86.inb(channels[channel].ctrl + reg - 0xa),
-        0xe...0x16 => x86.inb(channels[channel].bmide + reg - 0xe),
-        else => @compileError("bad IDE register."),
-    };
-}
-
-pub inline fn ide_read_buffer(channel: u8, comptime reg: u8, buf: var, cnt: usize) void {
-    if (reg > 0x07 and reg < 0x0C) ide_write(channel, ATA_REG_CONTROL, 0x80 | channels[channel].nIEN);
-    defer if (reg > 0x07 and reg < 0x0C) ide_write(channel, ATA_REG_CONTROL, channels[channel].nIEN);
-    switch (reg) {
-        0x0...0x7 => x86.insl(channels[channel].base + reg - 0x0, buf, cnt),
-        0x8...0xb => x86.insl(channels[channel].base + reg - 0x6, buf, cnt),
-        0xc...0xd => x86.insl(channels[channel].ctrl + reg - 0xa, buf, cnt),
-        0xe...0x16 => x86.insl(channels[channel].bmide + reg - 0xe, buf, cnt),
-        else => @compileError("bad IDE register."),
-    }
-}
-
-pub inline fn ide_write(channel: u8, comptime reg: u8, data: u8) void {
-    if (reg > 0x07 and reg < 0x0C) ide_write(channel, ATA_REG_CONTROL, 0x80 | channels[channel].nIEN);
-    defer if (reg > 0x07 and reg < 0x0C) ide_write(channel, ATA_REG_CONTROL, channels[channel].nIEN);
-    switch (reg) {
-        0x0...0x7 => x86.outb(channels[channel].base + reg - 0x0, data),
-        0x8...0xb => x86.outb(channels[channel].base + reg - 0x6, data),
-        0xc...0xd => x86.outb(channels[channel].ctrl + reg - 0xa, data),
-        0xe...0x16 => x86.outb(channels[channel].bmide + reg - 0xe, data),
-        else => @compileError("bad IDE register."),
-    }
-}
-
-inline fn ide_poll(channel: u8) void {
-    for ([_]u8{ 0, 1, 2, 3 }) |_| _ = ide_read(channel, ATA_REG_ALTSTATUS); // wate 100ns per call
-    while (ide_read(channel, ATA_REG_STATUS) & ATA_SR_BSY != 0) {} // Wait for BSY to be zero.
-}
-
-inline fn ide_poll_check(channel: u8) !void {
-    // (I) Delay 400 nanosecond for BSY to be set:
-    ide_poll(channel);
-    const state = ide_read(channel, ATA_REG_STATUS); // Read Status Register.
-    if (state & ATA_SR_ERR != 0) return error.ATAStatusReg; // Error.
-    if (state & ATA_SR_DF != 0) return error.ATADeviceFault; // Device Fault.
-    if ((state & ATA_SR_DRQ) == 0) return error.ATANoDRQ; // DRQ should be set
-}
-
-fn ide_ata_access(direction: u8, drive: u8, lba: u64, numsects: u8, selector: u16, edi: usize) !void {
-    var dma = false; // 0: No DMA, 1: DMA
-    var cmd: u8 = 0;
-    var lba_io = [1]u8{0} ** 8;
-    const channel = ide_devices[drive].channel; // Read the Channel.
-    const slavebit = ide_devices[drive].drive; // Read the Drive [Master/Slave]
-    const bus: usize = channels[channel].base; // Bus Base, like 0x1F0 which is also data port.
-    var words: usize = 256; // Almost every ATA drive has a sector-size of 512-byte.
-
-    ide_irq_invoked = false;
-    channels[channel].nIEN = 0x02;
-    ide_write(channel, ATA_REG_CONTROL, channels[channel].nIEN);
-
-    var lba_mode: u8 = undefined;
-    var head: u8 = undefined;
-
-    // (I) Select one from LBA28, LBA48 or CHS;
-    if (lba >= 0x10000000) {
-        // Sure Drive should support LBA in this case, or you are giving a wrong LBA.
-        // LBA48:
-        lba_io = @bitCast([8]u8, lba);
-        head = 0; // Lower 4-bits of HDDEVSEL are not used here.
-        lba_mode = 2;
-    } else if (ide_devices[drive].capabilities & 0x200 != 0) { // Drive supports LBA?
-        // LBA28:
-        lba_io = @bitCast([8]u8, lba);
-        assert(lba_io[3] == 0);
-        head = @intCast(u8, (lba & 0xF000000) >> 24);
-        lba_mode = 1;
-    } else {
-        // CHS:
-        const sect = @intCast(u8, (lba % 63) + 1);
-        const cyl = (lba + 1 - sect) / (16 * 63);
-        lba_io[0] = sect;
-        lba_io[1] = @intCast(u8, (cyl >> 0) & 0xFF);
-        lba_io[2] = @intCast(u8, (cyl >> 8) & 0xFF);
-        lba_io[3] = 0;
-        lba_io[4] = 0;
-        lba_io[5] = 0;
-        head = @intCast(u8, (lba + 1 - sect) % (16 * 63) / (63)); // Head number is written to HDDEVSEL lower 4-bits.
-        lba_mode = 0;
-    }
-
-    // (III) Wait if the drive is busy;
-    while (ide_read(channel, ATA_REG_STATUS) & ATA_SR_BSY != 0) {} // Wait if busy.)
-
-    // (IV) Select Drive from the controller;
-    if (lba_mode == 0) ide_write(channel, ATA_REG_HDDEVSEL, 0xA0 | (slavebit << 4) | head); // Drive & CHS.
-    if (lba_mode != 0) ide_write(channel, ATA_REG_HDDEVSEL, 0xE0 | (slavebit << 4) | head); // Drive & LBA
-
-    // (V) Write Parameters;
-    if (lba_mode == 2) {
-        ide_write(channel, ATA_REG_SECCOUNT1, 0);
-        ide_write(channel, ATA_REG_LBA3, lba_io[3]);
-        ide_write(channel, ATA_REG_LBA4, lba_io[4]);
-        ide_write(channel, ATA_REG_LBA5, lba_io[5]);
-    }
-    ide_write(channel, ATA_REG_SECCOUNT0, numsects);
-    ide_write(channel, ATA_REG_LBA0, lba_io[0]);
-    ide_write(channel, ATA_REG_LBA1, lba_io[1]);
-    ide_write(channel, ATA_REG_LBA2, lba_io[2]);
-
-    // (VI) Select the command and send it;
-    if (lba_mode == 0 and direction == 0 and !dma) cmd = ATA_CMD_READ_PIO;
-    if (lba_mode == 1 and direction == 0 and !dma) cmd = ATA_CMD_READ_PIO;
-    if (lba_mode == 2 and direction == 0 and !dma) cmd = ATA_CMD_READ_PIO_EXT;
-    if (lba_mode == 0 and direction == 0 and dma) cmd = ATA_CMD_READ_DMA;
-    if (lba_mode == 1 and direction == 0 and dma) cmd = ATA_CMD_READ_DMA;
-    if (lba_mode == 2 and direction == 0 and dma) cmd = ATA_CMD_READ_DMA_EXT;
-    if (lba_mode == 0 and direction == 1 and !dma) cmd = ATA_CMD_WRITE_PIO;
-    if (lba_mode == 1 and direction == 1 and !dma) cmd = ATA_CMD_WRITE_PIO;
-    if (lba_mode == 2 and direction == 1 and !dma) cmd = ATA_CMD_WRITE_PIO_EXT;
-    if (lba_mode == 0 and direction == 1 and dma) cmd = ATA_CMD_WRITE_DMA;
-    if (lba_mode == 1 and direction == 1 and dma) cmd = ATA_CMD_WRITE_DMA;
-    if (lba_mode == 2 and direction == 1 and dma) cmd = ATA_CMD_WRITE_DMA_EXT;
-    ide_write(channel, ATA_REG_COMMAND, cmd); // Send the Command.
-
-    if (dma) {
-        //TODO: dma
-        // if (direction == 0);
-        //    // DMA Read.
-        // else;
-        //    // DMA Write.
-    }
-    if (!dma and direction == 0) {
-        // PIO Read.
-        var i: u8 = 0;
-        while (i < numsects) : (i = i + 1) {
-            var iedi = edi + i * (words * 2);
-            try ide_poll_check(channel); // Polling, set error and exit if there is.
-            asm volatile ("pushw %%es");
-            // asm volatile ("mov %[a], %%es"
-            //     :
-            //     : [a] "{eax}" (selector)
-            // );
-            asm volatile ("rep insw"
-                :
-                : [words] "{ecx}" (words),
-                  [bus] "{dx}" (bus),
-                  [iedi] "{edi}" (iedi)
-            ); // Receive Data.
-            asm volatile ("popw %%es");
-        }
-    }
-    if (!dma and direction == 1) {
-        // PIO Write.
-        var i: u8 = 0;
-        var iedi = edi;
-        while (i < numsects) : (i = i + 1) {
-            iedi = edi + i * (words * 2);
-            ide_poll(channel); // Polling.
-            asm volatile ("pushw %%ds");
-            asm volatile ("mov %%ax, %%ds"
-                :
-                : [selector] "{eax}" (selector)
-            );
-            asm volatile ("rep outsw"
-                :
-                : [words] "{ecx}" (words),
-                  [bus] "{dx}" (bus),
-                  [iedi] "{esi}" (iedi)
-            ); // Send Data
-            asm volatile ("popw %%ds");
-        }
-        if (lba_mode == 2) ide_write(channel, ATA_REG_COMMAND, ATA_CMD_CACHE_FLUSH_EXT);
-        if (lba_mode != 2) ide_write(channel, ATA_REG_COMMAND, ATA_CMD_CACHE_FLUSH);
-        try ide_poll_check(channel); // Polling.
-    }
-}
-
-pub const blockdev = kernel.bio.BlockDev(512){
+pub const first_ide_drive = kernel.bio.BlockDev(512){
     .read = ide_block_read,
     .write = null,
 };
-pub fn ide_block_read(lba: u64, buf: *[512]u8) void {
-    return ide_read_sectors(0, 1, lba, 0x10, @ptrToInt(buf)) catch unreachable;
-}
 
-pub fn ide_read_sectors(drive: u2, numsects: u8, lba: u64, es: u8, edi: usize) !void {
-    // 1: Check if the drive presents:
-    if (ide_devices[drive].reserved == 0) {
-        return error.DriveNotFound; // Drive Not Found!
-    } else if (ide_devices[drive].idetype == IDE_ATA and (lba + numsects) > ide_devices[drive].size) {
-        // 2: Check if inputs are valid:
-        return error.InvalidSeek; // Seeking to invalid position.
-    } else {
-        // 3: Read in PIO Mode through Polling & IRQs:
-        if (ide_devices[drive].idetype == IDE_ATA) {
-            try ide_ata_access(ATA_READ, drive, lba, numsects, es, edi);
-        } else if (ide_devices[drive].idetype == IDE_ATAPI) {
-            return error.ATAPINotImplemented;
-            // var i: u8 = 0;
-            // while (i < numsects) : (i = i + 1) {
-            //     // err = ide_atapi_read(drive, lba + i, 1, es, edi + (i * 2048));
-            // }
-        }
-    }
+pub fn ide_block_read(lba: u64, buf: *[512]u8) void {
+    // read 1 sector on drive 0
+    kernel.println("buf at 0x{x}", @ptrToInt(buf));
+    return ide_device_0.?.read_sectors(1, lba, 0x10, @ptrToInt(buf)) catch unreachable;
 }
 
 pub fn init(dev: kernel.pci.PciDevice) void {
@@ -317,7 +401,7 @@ pub fn init(dev: kernel.pci.PciDevice) void {
     if (dev.intr_line() == 0xfe) {
         kernel.println("[ide] detected ATA device");
     } else {
-        kernel.println("Potential SATA device, aborting.");
+        kernel.println("[ide] Potential SATA device. Not implemented. Hanging");
         x86.hang();
     }
 
@@ -326,6 +410,7 @@ pub fn init(dev: kernel.pci.PciDevice) void {
     const BAR2 = @intCast(u16, dev.bar(2));
     const BAR3 = @intCast(u16, dev.bar(3));
     const BAR4 = @intCast(u16, dev.bar(4));
+    var channels: [2]IDEChannelRegister = undefined;
     channels[ATA_PRIMARY].base = if (BAR0 == 0) 0x1f0 else BAR0;
     channels[ATA_PRIMARY].ctrl = if (BAR1 == 0) 0x3F6 else BAR1;
     channels[ATA_SECONDARY].base = if (BAR2 == 0) 0x170 else BAR2;
@@ -333,92 +418,8 @@ pub fn init(dev: kernel.pci.PciDevice) void {
     channels[ATA_PRIMARY].bmide = (BAR4 & 0xFFFC); // Bus Master IDE
     channels[ATA_SECONDARY].bmide = (BAR4 & 0xFFFC) + 8; // Bus Master IDE
 
-    // turn off irqs
-    ide_write(ATA_PRIMARY, ATA_REG_CONTROL, 2);
-    ide_write(ATA_SECONDARY, ATA_REG_CONTROL, 2);
-
-    // parse identification space
-    var count: usize = 0;
-    var err: u8 = 0;
-    var status: u8 = 0;
-    for ([_]u8{ 0, 1 }) |i| {
-        for ([_]u8{ 0, 1 }) |j| {
-            var idetype: u8 = IDE_ATA;
-            ide_devices[count].reserved = 0; // Assuming that no drive here.
-
-            // (I) Select Drive:
-            ide_write(i, ATA_REG_HDDEVSEL, 0xA0 | (j << 4)); // Select Drive.
-            kernel.task.usleep(1000) catch unreachable; // Wait 1ms for drive select to work.
-
-            // (II) Send ATA Identify Command:
-            ide_write(i, ATA_REG_COMMAND, ATA_CMD_IDENTIFY);
-            kernel.task.usleep(1000) catch unreachable;
-
-            if (ide_read(i, ATA_REG_STATUS) == 0) continue; // If Status = 0, No Device.
-            while (true) {
-                status = ide_read(i, ATA_REG_STATUS);
-                if (status & ATA_SR_ERR != 0) {
-                    err = 1;
-                    break;
-                } // If Err, Device is not ATA.
-                if ((status & ATA_SR_BSY == 0) and (status & ATA_SR_DRQ != 0)) break; // Everything is right.
-            }
-
-            // (IV) Probe for ATAPI Devices:)
-            if (err != 0) {
-                // Device is not ATA
-                const cl = ide_read(i, ATA_REG_LBA1);
-                const ch = ide_read(i, ATA_REG_LBA2);
-
-                if (cl == 0x14 and ch == 0xEB) idetype = IDE_ATAPI;
-                if (cl == 0x69 and ch == 0x96) idetype = IDE_ATAPI;
-                if (idetype != IDE_ATAPI) continue; // Unknown Type (may not be a device).
-
-                ide_write(i, ATA_REG_COMMAND, ATA_CMD_IDENTIFY_PACKET);
-                kernel.task.usleep(1000) catch unreachable;
-            }
-
-            // (V) Read Identification Space of the Device:
-            ide_read_buffer(i, ATA_REG_DATA, &ide_buf, 128);
-
-            ide_devices[count].reserved = 1;
-            ide_devices[count].idetype = idetype;
-            ide_devices[count].channel = i;
-            ide_devices[count].drive = j;
-            ide_devices[count].signature = @ptrCast(*const u8, &ide_buf[ATA_IDENT_DEVICETYPE]).*;
-            ide_devices[count].capabilities = @ptrCast(*const u8, &ide_buf[ATA_IDENT_CAPABILITIES]).*;
-            ide_devices[count].commandsets = @ptrCast(*const usize, &ide_buf[ATA_IDENT_COMMANDSETS]).*;
-
-            // (VII) Get Size:
-            if (ide_devices[count].commandsets & (1 << 26) != 0) {
-                // Device uses 48-Bit Addressing:
-                ide_devices[count].size = @ptrCast(*const usize, &ide_buf[ATA_IDENT_MAX_LBA_EXT]).*;
-            } else {
-                // Device uses CHS or 28-bit Addressing:
-                ide_devices[count].size = @ptrCast(*const usize, &ide_buf[ATA_IDENT_MAX_LBA]).*;
-            }
-
-            // (VIII) String indicates model of device (like Western Digital HDD and SONY DVD-RW...):
-            var k: u16 = 0;
-            while (k < 40) : (k = k + 2) {
-                ide_devices[count].model[k] = ide_buf[ATA_IDENT_MODEL + k + 1];
-                ide_devices[count].model[k + 1] = ide_buf[ATA_IDENT_MODEL + k];
-            }
-            ide_devices[count].model[40] = 0; // Terminate String.
-
-            count = count + 1;
-        }
-    }
-    // 4- Print Summary:
-    for ([_]u8{ 0, 1, 2, 3 }) |i| {
-        if (ide_devices[i].reserved == 1) {
-            kernel.println(
-                "[ide] drive {} {} ({}MB) - {}",
-                i,
-                if (ide_devices[i].idetype == 0) "ATA" else "ATAPI",
-                ide_devices[i].size * 512 / 1024 / 1024,
-                ide_devices[i].model,
-            );
-        }
-    }
+    ide_device_0 = IDEDevice.init(channels[ATA_PRIMARY], 0) catch unreachable;
+    ide_device_1 = IDEDevice.init(channels[ATA_PRIMARY], 1) catch unreachable;
+    ide_device_2 = IDEDevice.init(channels[ATA_SECONDARY], 0) catch unreachable;
+    ide_device_3 = IDEDevice.init(channels[ATA_SECONDARY], 1) catch unreachable;
 }
