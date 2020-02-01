@@ -72,7 +72,6 @@ const ATA_IDENT_COMMANDSETS = 164;
 const ATA_IDENT_MAX_LBA_EXT = 200;
 
 const atapi_packet: [12]u8 = [1]u8{0xA8} ++ [1]u8{0} ** 11;
-var ide_irq_invoked = false;
 var ide_buf: [2048]u8 = [1]u8{0} ** 2048;
 
 const IDEDevice = struct {
@@ -85,6 +84,7 @@ const IDEDevice = struct {
     commandsets: usize, // Command Sets Supported.
     size: usize, // Size in Sectors.
     model: [41]u8, // Model in string.
+    ide_irq_invoked: bool = false,
 
     pub fn init(channel: IDEChannelRegister, drive: u8) !?*IDEDevice {
         var idetype: u8 = IDE_ATA;
@@ -208,7 +208,7 @@ const IDEDevice = struct {
         }
     }
 
-    pub fn read_sectors(self: IDEDevice, numsects: u8, lba: u64, selector: u8, buf: usize) !void {
+    pub fn read_sectors(self: *IDEDevice, numsects: u8, lba: u64, selector: u8, buf: usize) !void {
         // 1: Check if the drive presents:
         if (self.reserved == 0) {
             return error.DriveNotFound; // Drive Not Found!
@@ -238,14 +238,14 @@ const IDEDevice = struct {
         );
     }
 
-    fn ata_access(self: IDEDevice, direction: u8, lba: u64, numsects: u8, selector: u16, buf: usize) !void {
+    fn ata_access(self: *IDEDevice, direction: u8, lba: u64, numsects: u8, selector: u16, buf: usize) !void {
         var dma = false; // 0: No DMA, 1: DMA
         var cmd: u8 = 0;
         var lba_io = [1]u8{0} ** 8;
         const bus: u16 = self.channel.base; // Bus Base, like 0x1F0 which is also data port.
         const words: usize = 256; // Almost every ATA drive has a sector-size of 512-byte.
 
-        ide_irq_invoked = false;
+        self.ide_irq_invoked = false;
         self.write(ATA_REG_CONTROL, 2); // disable IRQa
 
         var lba_mode: u8 = undefined;
@@ -326,21 +326,23 @@ const IDEDevice = struct {
             while (i < numsects) : (i = i + 1) {
                 var iedi = buf + i * (words * 2);
                 try self.poll_check(); // Polling, set error and exit if there is.
-                asm volatile ("pushw %%es");
-                asm volatile ("mov %[a], %%es"
-                    :
-                    : [a] "{eax}" (selector)
-                );
-                x86.insl(bus, iedi, words / 2);
-                // asm volatile ("cld; rep; insw"
-                //     : [iedi] "={edi}" (iedi),
-                //       [words] "={ecx}" (words)
-                //     : [bus] "{dx}" (bus),
-                //       [iedi] "0" (iedi),
-                //       [words] "1" (words)
-                //     : "memory", "cc"
+
+                // TODO? use selectors for non flat layouts
+                // asm volatile ("pushw %%es");
+                // asm volatile ("mov %[a], %%es"
+                //     :
+                //     : [a] "{eax}" (selector)
                 // );
-                asm volatile ("popw %%es");
+                asm volatile ("rep insw"
+                    : [iedi] "={edi}" (iedi),
+                      [words] "={ecx}" (words)
+                    : [bus] "{dx}" (bus),
+                      [iedi] "0" (iedi),
+                      [words] "1" (words)
+                    : "memory", "cc"
+                );
+                // asm volatile ("popw %%es");
+                // x86.hang();
             }
         }
         if (!dma and direction == 1) {
@@ -387,7 +389,6 @@ pub const first_ide_drive = kernel.bio.BlockDev(512){
 
 pub fn ide_block_read(lba: u64, buf: *[512]u8) void {
     // read 1 sector on drive 0
-    kernel.println("buf at 0x{x}", @ptrToInt(buf));
     return ide_device_0.?.read_sectors(1, lba, 0x10, @ptrToInt(buf)) catch unreachable;
 }
 

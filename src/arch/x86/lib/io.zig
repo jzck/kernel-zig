@@ -1,3 +1,5 @@
+usingnamespace @import("../index.zig");
+
 pub inline fn inb(port: u16) u8 {
     return asm volatile ("inb %[port], %[result]"
         : [result] "={al}" (-> u8)
