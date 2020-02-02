@@ -19,7 +19,6 @@ export const multiboot_header align(4) linksection(".multiboot") = multiboot: {
 export fn kmain(magic: u32, info: *const multiboot.MultibootInfo) noreturn {
     assert(magic == multiboot.MULTIBOOT_BOOTLOADER_MAGIC);
     clear();
-    asm volatile ("movd %%edi, %%xmm0");
     println("--- x86 initialization ---", .{});
     x86.x86_main(info);
     println("--- core initialization ---", .{});

@@ -1,5 +1,6 @@
 const Builder = @import("std").build.Builder;
 const builtin = @import("builtin");
+const std = @import("std");
 
 pub fn build(b: *Builder) void {
     const kernel = b.addExecutable("kernel", "src/main.zig");
@@ -14,7 +15,18 @@ pub fn build(b: *Builder) void {
     kernel.addAssemblyFile("src/arch/x86/switch_tasks.s");
 
     kernel.setBuildMode(b.standardReleaseOptions());
-    kernel.setTarget(builtin.Arch.i386, builtin.Os.freestanding, builtin.Abi.none);
+    kernel.setTheTarget(builtin.Target{
+        .Cross = std.Target.Cross{
+            .arch = builtin.Target.Arch.i386,
+            .os = builtin.Target.Os.freestanding,
+            .abi = builtin.Target.Abi.none,
+            .cpu_features = builtin.Target.CpuFeatures.initFromCpu(
+                builtin.Arch.i386,
+                &builtin.Target.x86.cpu._i686,
+            ),
+        },
+    });
+
     kernel.setLinkerScriptPath("src/arch/x86/linker.ld");
     b.default_step.dependOn(&kernel.step);
 }

@@ -86,9 +86,7 @@ pub fn initialize(info: *const kernel.multiboot.MultibootInfo) void {
     }
 
     const a = available();
-    kernel.println("available memory: {} MiB ", .{a});
-    // kernel.println("available memory: {d} MiB ", .{available() / 1024 / 1024});
-    hang();
+    kernel.println("available memory: {d} MiB ", .{available() / 1024 / 1024});
 }
 
 pub fn format() void {
