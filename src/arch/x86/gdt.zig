@@ -83,7 +83,7 @@ var gdt align(4) = [_]GDTEntry{
 
 // GDT descriptor register pointing at the GDT.
 var gdtr = GDTRegister{
-    .limit = u16(@sizeOf(@typeOf(gdt))),
+    .limit = @as(u16, @sizeOf(@TypeOf(gdt))),
     .base = &gdt[0],
 };
 

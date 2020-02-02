@@ -175,11 +175,11 @@ pub fn terminate() noreturn {
 pub fn cleaner_loop() noreturn {
     while (true) {
         if (terminated_tasks.popFirst()) |n| {
-            notify("DESTROYING {}", n.data.tid);
+            notify("DESTROYING {}", .{n.data.tid});
             n.data.destroy();
             vmem.destroy(n);
         } else {
-            notify("NOTHING TO CLEAN");
+            notify("NOTHING TO CLEAN", .{});
             block(.Paused);
         }
     }
@@ -201,7 +201,7 @@ fn unlock_scheduler() void {
         postpone_task_switches_counter -= 1;
         if (postpone_task_switches_flag == true and postpone_task_switches_counter == 0) {
             postpone_task_switches_flag = false;
-            notify("AFTER POSTPONE");
+            notify("AFTER POSTPONE", .{});
             schedule();
         }
         IRQ_disable_counter -= 1;
@@ -215,7 +215,7 @@ pub fn preempt() void {
 
     update_time_used();
     if (ready_tasks.first == null) {
-        notify("NO PREEMPT SINGLE TASK");
+        notify("NO PREEMPT SINGLE TASK", .{});
         time.task_slice_remaining = 0;
         return;
     }
@@ -251,7 +251,11 @@ pub fn switch_to(chosen: *TaskNode) void {
     }
 
     // don't inline the asm function, it needs to ret
-    @noInlineCall(switch_tasks, chosen.data.esp, @ptrToInt(old_task_esp_addr));
+    @call(
+        .{ .modifier = .never_inline },
+        switch_tasks,
+        .{ chosen.data.esp, @ptrToInt(old_task_esp_addr) },
+    );
 }
 
 pub var CPU_idle_time: u64 = 0;
@@ -267,7 +271,7 @@ pub fn schedule() void {
     // postponed
     if (postpone_task_switches_counter != 0 and current_task.data.state == .Running) {
         postpone_task_switches_flag = true;
-        notify("POSTPONING SCHEDULE");
+        notify("POSTPONING SCHEDULE", .{});
         return;
     }
     // next task
@@ -284,7 +288,7 @@ pub fn schedule() void {
     }
     // single task
     if (current_task.data.state == .Running) {
-        notify("SINGLE TASK");
+        notify("SINGLE TASK", .{});
         time.task_slice_remaining = 0;
         return;
     }
@@ -297,7 +301,7 @@ fn idle_mode() void {
     assert(current_task.data.state != .Running);
     assert(current_task.data.state != .ReadyToRun);
 
-    notify("IDLE");
+    notify("IDLE", .{});
 
     // borrow the current task
     const borrow = current_task;
@@ -323,7 +327,7 @@ fn idle_mode() void {
     }
 }
 
-pub fn notify(comptime message: []const u8, args: ...) void {
+pub fn notify(comptime message: []const u8, args: var) void {
     const bg = vga.background;
     const fg = vga.foreground;
     const cursor = vga.cursor;
@@ -341,18 +345,18 @@ pub fn notify(comptime message: []const u8, args: ...) void {
 }
 
 pub fn format_short() void {
-    print("{}R {}B {}S", ready_tasks.len, blocked_tasks.len, sleeping_tasks.len);
+    print("{}R {}B {}S", .{ ready_tasks.len, blocked_tasks.len, sleeping_tasks.len });
 }
 
 pub fn format() void {
     update_time_used();
 
-    println("{}", current_task.data);
+    println("{}", .{current_task.data});
 
     var it = ready_tasks.first;
-    while (it) |node| : (it = node.next) println("{}", node.data);
+    while (it) |node| : (it = node.next) println("{}", .{node.data});
     it = blocked_tasks.first;
-    while (it) |node| : (it = node.next) println("{}", node.data);
+    while (it) |node| : (it = node.next) println("{}", .{node.data});
     var sit = sleeping_tasks.first;
-    while (sit) |node| : (sit = node.next) println("{} {}", node.data.data, node.counter);
+    while (sit) |node| : (sit = node.next) println("{} {}", .{ node.data.data, node.counter });
 }

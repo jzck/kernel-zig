@@ -36,7 +36,7 @@ pub fn unmap(virt: usize) void {
     if (translate(virt)) |phys| {
         pmem.free(phys);
     } else {
-        kernel.println("can't unmap 0x{x} because it is not mapped.", virt);
+        kernel.println("can't unmap 0x{x} because it is not mapped.", .{virt});
     }
 }
 
@@ -67,12 +67,12 @@ pub fn format() void {
     i = 0;
     while (i < 1024) : (i += 1) {
         if (PD[i] == 0) continue;
-        kernel.println("p2[{}] -> 0x{x}", i, PD[i]);
+        kernel.println("p2[{}] -> 0x{x}", .{ i, PD[i] });
         if (PD[i] & HUGE != 0) continue;
         var j: usize = 0;
         while (j < 1024) : (j += 1) {
             var entry: PageEntry = PT[i * 1024 + j];
-            if (entry != 0) kernel.println("p2[{}]p1[{}] -> 0x{x}", i, j, entry);
+            if (entry != 0) kernel.println("p2[{}]p1[{}] -> 0x{x}", .{ i, j, entry });
         }
     }
 }

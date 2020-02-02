@@ -1,7 +1,7 @@
 usingnamespace @import("index.zig");
 
 pub fn init(dev: kernel.pci.PciDevice) void {
-    kernel.println("-- virtio-block init --");
+    kernel.println("-- virtio-block init --", .{});
     dev.format();
     assert(dev.header_type() == 0x0); // mass storage device
     assert(dev.subsystem() == 0x2); // virtio-block
@@ -10,7 +10,7 @@ pub fn init(dev: kernel.pci.PciDevice) void {
     const intr_pin = dev.config_read(u8, 0x3d);
     const min_grant = dev.config_read(u8, 0x3e);
     const max_lat = dev.config_read(u8, 0x3f);
-    kernel.println("{x} {} {} {}", intr_line, intr_pin, min_grant, max_lat);
+    kernel.println("{x} {} {} {}", .{ intr_line, intr_pin, min_grant, max_lat });
 
     // all virtio
     // 0                   1                   2                   3

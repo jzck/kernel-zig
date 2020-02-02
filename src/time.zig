@@ -23,9 +23,9 @@ pub fn uptime() void {
     const offset_s: u64 = offset_ms / 1000;
     offset_ms = @mod(offset_ms / 100, 10);
 
-    print("{}.{:.3}", offset_s, offset_ms);
+    print("{}.{:.3}", .{ offset_s, offset_ms });
 }
 
 pub fn utilisation() void {
-    print("{}%", 100 * (offset_us - task.CPU_idle_time) / offset_us);
+    print("{}%", .{100 * (offset_us - task.CPU_idle_time) / offset_us});
 }

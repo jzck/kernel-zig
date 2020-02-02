@@ -12,7 +12,7 @@ var idt_table: [256]IDTEntry = undefined;
 
 // IDT descriptor register pointing at the IDT.
 const idtr = IDTRegister{
-    .limit = u16(@sizeOf(@typeOf(idt_table))),
+    .limit = @as(u16, @sizeOf(@TypeOf(idt_table))),
     .base = &idt_table,
 };
 
@@ -68,21 +68,21 @@ pub fn initialize() void {
 }
 
 fn general_protection_fault() void {
-    kernel.println("general protection fault");
+    kernel.println("general protection fault", .{});
     hang();
 }
 
 fn debug_trap() void {
-    kernel.println("debug fault/trap");
-    kernel.println("dr7: 0b{b}", dr7());
+    kernel.println("debug fault/trap", .{});
+    kernel.println("dr7: 0b{b}", .{dr7()});
 }
 
 fn page_fault() void {
     const vaddr = cr2();
-    kernel.println("cr2: 0x{x}", vaddr);
-    kernel.println("phy: 0x{x}", paging.translate(vaddr));
-    kernel.println("pde: 0x{x} ({})", paging.pde(vaddr), vaddr >> 22);
-    kernel.println("pte: 0x{x} ({})", paging.pte(vaddr), vaddr >> 12);
+    kernel.println("cr2: 0x{x}", .{vaddr});
+    kernel.println("phy: 0x{x}", .{paging.translate(vaddr)});
+    kernel.println("pde: 0x{x} ({})", .{ paging.pde(vaddr), vaddr >> 22 });
+    kernel.println("pte: 0x{x} ({})", .{ paging.pte(vaddr), vaddr >> 12 });
     // paging.format();
     hang();
 }

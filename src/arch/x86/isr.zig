@@ -66,7 +66,7 @@ pub const Context = packed struct {
     ss: u32,
 
     pub inline fn setReturnValue(self: *volatile Context, value: var) void {
-        self.registers.eax = if (@typeOf(value) == bool) @boolToInt(value) else @intCast(u32, value);
+        self.registers.eax = if (@TypeOf(value) == bool) @boolToInt(value) else @intCast(u32, value);
     }
 };
 

@@ -35,12 +35,9 @@ var handlers = [_]fn () void{unhandled} ** 48;
 
 fn unhandled() noreturn {
     const n = isr.context.interrupt_n;
-    kernel.print("unhandled interrupt number {d}", n);
-    if (n < IRQ_0) {
-        kernel.println(" (exception)");
-    } else {
-        kernel.println(" (IRQ number {d})", n - IRQ_0);
-    }
+    kernel.print("unhandled interrupt number {d}", .{n});
+    if (n < IRQ_0) kernel.println(" (exception)", .{});
+    if (n >= IRQ_0) kernel.println(" (IRQ number {d})", .{n - IRQ_0});
     hang();
 }
 
@@ -57,10 +54,11 @@ export fn interruptDispatch() void {
     switch (n) {
         // Exceptions.
         EXCEPTION_0...EXCEPTION_31 => {
-            kernel.println("");
-            kernel.println("num: {}", isr.context.interrupt_n);
-            kernel.println("err: {}", isr.context.error_code);
-            kernel.println("ip:  0x{x}", isr.context.eip);
+            kernel.println("", .{});
+            kernel.println("num: {}", .{n});
+            kernel.println("err: {}", .{@truncate(u8, isr.context.error_code)});
+            kernel.println("ip:  0x{x}", .{@truncate(u16, isr.context.eip)});
+            kernel.println("ip:  0x{x}", .{@truncate(u16, isr.context.eip >> 16)});
             return handlers[n]();
         },
 
@@ -171,16 +169,18 @@ pub fn remapPIC() void {
     picwait();
 }
 
-pub fn maskIRQ(irq: u8, mask: bool) void {
+pub fn maskIRQ(irq: u8, comptime mask: bool) void {
     if (irq > 15) return;
     // Figure out if master or slave PIC owns the IRQ.
-    const port = if (irq < 8) u16(PIC1_DATA) else u16(PIC2_DATA);
+    const port = @as(u16, if (irq < 8) PIC1_DATA else PIC2_DATA);
     const old = inb(port); // Retrieve the current mask.
 
     // Mask or unmask the interrupt.
-    const shift = @intCast(u3, irq % 8);
-    if (mask) outb(port, old | (u8(1) << shift));
-    if (!mask) outb(port, old & ~(u8(1) << shift));
+    const shift = @truncate(u3, irq % 8);
+    // const shift = @truncate(u3, if (irq < 8) irq else irq - 8);
+    const bit = @as(u8, 1) << shift;
+    if (mask) outb(port, old | bit);
+    if (!mask) outb(port, old & ~bit);
     const new = inb(port); // Retrieve the current mask.
 }
 

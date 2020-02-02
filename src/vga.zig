@@ -53,10 +53,10 @@ pub fn disableCursor() void {
 }
 
 const Errors = error{};
-pub fn print(comptime format: []const u8, args: ...) void {
+pub fn print(comptime format: []const u8, args: var) void {
     var a = std.fmt.format({}, Errors, printCallback, format, args);
 }
-pub fn println(comptime format: []const u8, args: ...) void {
+pub fn println(comptime format: []const u8, args: var) void {
     var a = print(format ++ "\n", args);
 }
 pub fn clear() void {
@@ -74,12 +74,11 @@ pub fn topbar() void {
         vga.cursor_enabled = false;
 
         time.uptime();
-        print(" | ");
+        print(" | ", .{});
         time.utilisation();
-        print(" | ");
+        print(" | ", .{});
         task.format_short();
-        // print(" ({})", task.IRQ_disable_counter);
-        println("");
+        println("", .{});
 
         vga.cursor_enabled = true;
         vga.cursor = cursor;

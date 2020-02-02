@@ -31,17 +31,17 @@ const commands = [_]Command{
 
 fn execute(input: []u8) void {
     for (commands) |c| if (std.mem.eql(u8, input, c.name)) return c.f();
-    println("{}: command not found, list of available commands:", input);
-    for (commands) |c| println("{}", c.name);
+    println("{}: command not found, list of available commands:", .{input});
+    for (commands) |c| println("{}", .{c.name});
 }
 
 pub fn keypress(char: u8) void {
     // this is a custom "readline" capped at 10 characters
     switch (char) {
         '\n' => {
-            print("\n");
+            print("\n", .{});
             if (command_len > 0) execute(command[0..command_len]);
-            print("> ");
+            print("> ", .{});
             command_len = 0;
         },
         '\x00' => return,
@@ -70,7 +70,7 @@ pub fn loop() void {
     input_ring.init() catch unreachable;
     input_ring.task = task.current_task;
     ps2.keyboard_callback = keyboard_callback;
-    print("> ");
+    print("> ", .{});
     while (true) {
         while (input_ring.read()) |c| keypress(c);
         task.block(.IOWait);

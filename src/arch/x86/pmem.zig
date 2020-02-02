@@ -28,7 +28,7 @@ pub inline fn available_MiB() usize {
 //
 pub fn allocate() !usize {
     if (available() == 0) {
-        kernel.println("out of memory");
+        kernel.println("out of memory", .{});
         return error.OutOfMemory;
     }
     stack_index -= 1;
@@ -82,12 +82,15 @@ pub fn initialize(info: *const kernel.multiboot.MultibootInfo) void {
             free(start);
 
         // Go to the next entry in the memory map.
-        map += entry.size + @sizeOf(@typeOf(entry.size));
+        map += entry.size + @sizeOf(@TypeOf(entry.size));
     }
 
-    kernel.println("available memory: {d} MiB ", available() / 1024 / 1024);
+    const a = available();
+    kernel.println("available memory: {} MiB ", .{a});
+    // kernel.println("available memory: {d} MiB ", .{available() / 1024 / 1024});
+    hang();
 }
 
 pub fn format() void {
-    kernel.println("physframes left: {d} ({d} MiB)", stack_index, available_MiB());
+    kernel.println("physframes left: {d} ({d} MiB)", .{ stack_index, available_MiB() });
 }

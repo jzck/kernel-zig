@@ -41,15 +41,10 @@ pub const PciDevice = struct {
     }
 
     pub fn format(self: PciDevice) void {
-        print("{}:{}.{}", self.bus, self.slot, self.function);
-        print(" {x},{x:2}", self.class(), self.subclass());
-        print(" 0x{x} 0x{x}", self.vendor, self.device());
-        if (self.driver()) |d| {
-            print(" {}", d.name);
-        } else {
-            print(" (none)");
-        }
-        println("");
+        print("{}:{}.{}", .{ self.bus, self.slot, self.function });
+        print(" {x},{x:2}", .{ self.class(), self.subclass() });
+        print(" 0x{x} 0x{x}", .{ self.vendor, self.device() });
+        println(" {}", .{if (self.driver()) |d| d.name else " (none)"});
     }
 
     pub fn driver(self: PciDevice) ?Driver {
@@ -110,7 +105,7 @@ pub const PciDevice = struct {
     pub inline fn config_write(self: PciDevice, value: var, comptime offset: u8) void {
         // ask for access before writing config
         x86.outl(PCI_CONFIG_ADDRESS, self.address(offset));
-        switch (@typeOf(value)) {
+        switch (@TypeOf(value)) {
             // read the correct size
             u8 => return x86.outb(PCI_CONFIG_DATA, value),
             u16 => return x86.outw(PCI_CONFIG_DATA, value),
@@ -177,7 +172,7 @@ pub fn scan() void {
 
 pub fn lspci() void {
     var slot: u5 = 0;
-    println("b:s.f c, s vendor device driver");
+    println("b:s.f c, s vendor device driver", .{});
     while (slot < 31) : (slot += 1) {
         if (PciDevice.init(0, slot, 0)) |dev| {
             var function: u3 = 0;

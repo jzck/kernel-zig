@@ -12,7 +12,7 @@ pub fn Ring(comptime T: type) type {
 
         //TODO: allocator argument and remove the namespace
         pub fn init(ring: *Self) !void {
-            ring.buffer = try vmem.create(@typeOf(ring.buffer.*));
+            ring.buffer = try vmem.create(@TypeOf(ring.buffer.*));
         }
 
         pub fn write(ring: *Self, elem: T) void {

@@ -30,14 +30,14 @@ const ATA_CMD_IDENTIFY_PACKET = 0xA1;
 const ATA_CMD_IDENTIFY = 0xEC;
 
 // Status:
-const ATA_SR_BSY = 0x80; // Busy
+const ATA_SR_BUSY = 0x80;
 const ATA_SR_DRDY = 0x40; // Drive ready
 const ATA_SR_DF = 0x20; // Drive write fault
 const ATA_SR_DSC = 0x10; // Drive seek complete
 const ATA_SR_DRQ = 0x08; // Data request ready
 const ATA_SR_CORR = 0x04; // Corrected data
-const ATA_SR_IDX = 0x02; // Index
-const ATA_SR_ERR = 0x01; // Error
+const ATA_SR_IDX = 0x02;
+const ATA_SR_ERR = 0x01;
 
 // Registers:
 const ATA_REG_DATA = 0x00;
@@ -116,7 +116,7 @@ const IDEDevice = struct {
                 err = 1;
                 break;
             } // If Err, Device is not ATA.
-            if ((status & ATA_SR_BSY == 0) and (status & ATA_SR_DRQ != 0)) break; // Everything is right.
+            if ((status & ATA_SR_BUSY == 0) and (status & ATA_SR_DRQ != 0)) break; // Everything is right.
         }
 
         // (IV) Probe for ATAPI Devices:)
@@ -163,7 +163,7 @@ const IDEDevice = struct {
 
     inline fn poll(self: IDEDevice) void {
         for ([_]u8{ 0, 1, 2, 3 }) |_| _ = self.read(ATA_REG_ALTSTATUS); // wait 100ns per call
-        while (self.read(ATA_REG_STATUS) & ATA_SR_BSY != 0) {} // Wait for BSY to be zero.
+        while (self.read(ATA_REG_STATUS) & ATA_SR_BUSY != 0) {} // Wait for BSY to be zero.
     }
     inline fn poll_check(self: IDEDevice) !void {
         // (I) Delay 400 nanosecond for BSY to be set:
@@ -230,12 +230,11 @@ const IDEDevice = struct {
     }
 
     pub fn format(self: IDEDevice) void {
-        kernel.println(
-            "[ide] {} drive ({}MB) - {}",
-            if (self.idetype == 0) "ATA" else "ATAPI",
+        kernel.println("[ide] {} drive ({}MB) - {}", .{
+            if (self.idetype == 0) "ATA  " else "ATAPI",
             self.size * 512 / 1024 / 1024,
             self.model,
-        );
+        });
     }
 
     fn ata_access(self: *IDEDevice, direction: u8, lba: u64, numsects: u8, selector: u16, buf: usize) !void {
@@ -279,7 +278,7 @@ const IDEDevice = struct {
         }
 
         // (III) Wait if the drive is busy;
-        while (self.read(ATA_REG_STATUS) & ATA_SR_BSY != 0) {} // Wait if busy.)
+        while (self.read(ATA_REG_STATUS) & ATA_SR_BUSY != 0) {} // Wait if busy.)
 
         // (IV) Select Drive from the controller;
         if (lba_mode == 0) self.write(ATA_REG_HDDEVSEL, 0xA0 | (self.drive << 4) | head); // Drive & CHS.
@@ -321,7 +320,6 @@ const IDEDevice = struct {
         }
         if (!dma and direction == 0) {
             // PIO Read.
-            kernel.println("pio read");
             var i: u8 = 0;
             while (i < numsects) : (i = i + 1) {
                 var iedi = buf + i * (words * 2);
@@ -393,16 +391,16 @@ pub fn ide_block_read(lba: u64, buf: *[512]u8) void {
 }
 
 pub fn init(dev: kernel.pci.PciDevice) void {
-    kernel.println("-- ide init --");
-    kernel.print("[ide] ");
+    kernel.println("-- ide init --", .{});
+    kernel.print("[ide] ", .{});
     dev.format();
     assert(dev.header_type() == 0x0); // mass storage device
 
     dev.config_write(@intCast(u8, 0xfe), 0x3c);
     if (dev.intr_line() == 0xfe) {
-        kernel.println("[ide] detected ATA device");
+        kernel.println("[ide] detected ATA device", .{});
     } else {
-        kernel.println("[ide] Potential SATA device. Not implemented. Hanging");
+        kernel.println("[ide] Potential SATA device. Not implemented. Hanging", .{});
         x86.hang();
     }
 
