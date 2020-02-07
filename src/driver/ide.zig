@@ -91,8 +91,9 @@ const IDEDevice = struct {
         var err: u8 = 0;
         var status: u8 = 0;
 
-        var self = try kernel.vmem.create(IDEDevice);
-        errdefer kernel.vmem.destroy(self);
+        // TODO: make this nicer
+        var self = try kernel.vmem.allocator.create(IDEDevice);
+        errdefer kernel.vmem.allocator.destroy(self);
         self.reserved = 1;
         self.channel = channel;
         self.drive = drive;

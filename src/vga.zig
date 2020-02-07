@@ -10,7 +10,7 @@ pub var vga = VGA{
     .vram = @intToPtr([*]VGAEntry, 0xb8000)[0..0x4000],
     .cursor = 80 * 2,
     .foreground = Color.Black,
-    .background = Color.LightGrey,
+    .background = Color.White,
 };
 
 // Color codes.
@@ -68,8 +68,8 @@ pub fn topbar() void {
     // println("topbar1");
     while (true) {
         const cursor = vga.cursor;
-        vga.background = Color.Green;
-        vga.foreground = Color.LightGrey;
+        vga.background = Color.Black;
+        vga.foreground = Color.White;
         vga.cursor = 0;
         vga.cursor_enabled = false;
 

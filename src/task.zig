@@ -34,6 +34,7 @@ pub const TaskState = enum {
 };
 
 pub const Task = struct {
+    stack: *[STACK_SIZE]u8 = undefined,
     esp: usize,
     tid: u16,
     time_used: u64 = 0,
@@ -44,8 +45,8 @@ pub const Task = struct {
 
     pub fn create(entrypoint: usize) !*Task {
         // Allocate and initialize the thread structure.
-        var t = try vmem.create(Task);
-        errdefer vmem.destroy(t);
+        var t = try vmem.allocator.create(Task);
+        errdefer vmem.allocator.destroy(t);
 
         t.time_used = 0;
         t.state = .ReadyToRun;
@@ -54,7 +55,8 @@ pub const Task = struct {
         assert(tid_counter != 0); //overflow
 
         // allocate a new stack
-        t.esp = (try vmem.malloc(STACK_SIZE)) + STACK_SIZE;
+        t.stack = try vmem.allocator.create([STACK_SIZE]u8);
+        t.esp = @ptrToInt(t.stack) + STACK_SIZE;
         // if the tasks rets from its main function, it will go to terminate
         // NOTE: if terminate is called this way it has an incorrect ebp!
         t.esp -= 4;
@@ -70,8 +72,8 @@ pub const Task = struct {
     }
 
     pub fn destroy(self: *Task) void {
-        vmem.free(self.esp);
-        vmem.destroy(self);
+        vmem.allocator.destroy(self.stack);
+        vmem.allocator.destroy(self);
     }
 };
 
@@ -82,8 +84,8 @@ pub fn new(entrypoint: usize) !*TaskNode {
     task.lock_scheduler();
     defer task.unlock_scheduler();
 
-    const node = try vmem.create(TaskNode);
-    errdefer vmem.destroy(node);
+    const node = try vmem.allocator.create(TaskNode);
+    errdefer vmem.allocator.destroy(node);
 
     node.data = try Task.create(entrypoint);
     ready_tasks.prepend(node);
@@ -99,7 +101,7 @@ pub fn wakeup_tick(tick: usize) bool {
     while (task.sleeping_tasks.popZero()) |sleepnode| {
         const tasknode = sleepnode.data;
         tasknode.data.state = .ReadyToRun;
-        vmem.free(@ptrToInt(sleepnode));
+        vmem.allocator.destroy(sleepnode);
         task.ready_tasks.prepend(tasknode);
         popped = true;
     }
@@ -111,7 +113,7 @@ pub fn usleep(usec: u64) !void {
     assert(current_task.data.state == .Running);
     update_time_used();
 
-    const node = try vmem.create(SleepNode);
+    const node = try vmem.allocator.create(SleepNode);
 
     lock_scheduler();
     defer unlock_scheduler();
@@ -177,7 +179,7 @@ pub fn cleaner_loop() noreturn {
         if (terminated_tasks.popFirst()) |n| {
             notify("DESTROYING {}", .{n.data.tid});
             n.data.destroy();
-            vmem.destroy(n);
+            vmem.allocator.destroy(n);
         } else {
             notify("NOTHING TO CLEAN", .{});
             block(.Paused);

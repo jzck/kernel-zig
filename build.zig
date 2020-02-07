@@ -15,18 +15,17 @@ pub fn build(b: *Builder) void {
     kernel.addAssemblyFile("src/arch/x86/switch_tasks.s");
 
     kernel.setBuildMode(b.standardReleaseOptions());
-    kernel.setTheTarget(builtin.Target{
+    kernel.setTheTarget(std.Target{
         .Cross = std.Target.Cross{
-            .arch = builtin.Target.Arch.i386,
-            .os = builtin.Target.Os.freestanding,
-            .abi = builtin.Target.Abi.none,
-            .cpu_features = builtin.Target.CpuFeatures.initFromCpu(
+            .arch = std.Target.Arch.i386,
+            .os = std.Target.Os.freestanding,
+            .abi = std.Target.Abi.none,
+            .cpu_features = std.Target.CpuFeatures.initFromCpu(
                 builtin.Arch.i386,
                 &builtin.Target.x86.cpu._i686,
             ),
         },
     });
-
     kernel.setLinkerScriptPath("src/arch/x86/linker.ld");
     b.default_step.dependOn(&kernel.step);
 }

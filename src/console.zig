@@ -67,7 +67,7 @@ pub fn keyboard_callback(char: u8) void {
 }
 
 pub fn loop() void {
-    input_ring.init() catch unreachable;
+    input_ring.init(vmem.allocator) catch unreachable;
     input_ring.task = task.current_task;
     ps2.keyboard_callback = keyboard_callback;
     print("> ", .{});

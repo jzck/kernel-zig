@@ -30,7 +30,7 @@ export fn kmain(magic: u32, info: *const multiboot.MultibootInfo) noreturn {
     _ = task.new(@ptrToInt(topbar)) catch unreachable;
     _ = task.new(@ptrToInt(console.loop)) catch unreachable;
 
-    var buf = vmem.create([512]u8) catch unreachable;
+    var buf = vmem.allocator.create([512]u8) catch unreachable;
     println("buf at 0x{x}", .{@ptrToInt(buf)});
     driver.ide.first_ide_drive.read(2, buf);
 

@@ -3,16 +3,17 @@ usingnamespace @import("index.zig");
 pub fn Ring(comptime T: type) type {
     return struct {
         const Self = @This();
-        const Size = u10; // 0-1024
+        const Size = u10; // 0-1023
         const size = @import("std").math.maxInt(Size);
+        allocator: std.mem.Allocator = undefined,
         buffer: *[size]T,
         task: ?*task.TaskNode = null,
         read_index: Size = 0,
         write_index: Size = 0,
 
-        //TODO: allocator argument and remove the namespace
-        pub fn init(ring: *Self) !void {
-            ring.buffer = try vmem.create(@TypeOf(ring.buffer.*));
+        pub fn init(ring: *Self, alloc: std.mem.Allocator) !void {
+            ring.allocator = alloc;
+            ring.buffer = try ring.allocator.create(@TypeOf(ring.buffer.*));
         }
 
         pub fn write(ring: *Self, elem: T) void {
@@ -24,7 +25,7 @@ pub fn Ring(comptime T: type) type {
         pub fn read(ring: *Self) ?T {
             if (ring.write_index == ring.read_index) return null;
             const id = ring.read_index;
-            ring.read_index +%= 1;
+            ring.read_index +%= 1; // add with overflow to loop the ring
             return ring.buffer[id];
         }
     };

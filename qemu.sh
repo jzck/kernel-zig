@@ -1,19 +1,21 @@
 #!/bin/bash
+# usage: ./qemu.sh start
+#        ./qemu.sh quit
 
 QEMU_SOCKET=/tmp/qemu.sock
 QEMU_MONITOR="sudo socat - UNIX-CONNECT:${QEMU_SOCKET}"
 QEMU_GDB_PORT=4242
 KERNEL=build/kernel
 
-start() {
+qemu_start() {
 	touch disk.img
 	# sudo pkill -9 qemu-system-i386
 	sudo qemu-system-i386 \
 		-gdb tcp::${QEMU_GDB_PORT} \
 		-monitor unix:${QEMU_SOCKET},server,nowait \
 		-enable-kvm \
-		-m 1341M \
 		-curses \
+		-m 1341M \
 		-hda disk.img \
 		-kernel ${KERNEL}
 		# -drive file=disk.img,if=virtio\
@@ -27,16 +29,7 @@ start() {
 		# -serial mon:stdio \
 }
 
-monitor() { sudo ${QEMU_MONITOR}; }
-monitor-exec() { echo "$1" | sudo ${QEMU_MONITOR} >/dev/null; }
+qemu_quit() { echo quit | sudo ${QEMU_MONITOR} >/dev/null; }
+qemu_monitor() { sudo ${QEMU_MONITOR}; }
 
-quit() { monitor-exec quit; }
-
-reload() {
-	monitor-exec stop
-	# monitor "change ide1-cd0 ${KERNEL}"
-	monitor-exec system_reset
-	monitor-exec cont
-}
-
-"$@"
+qemu_"$@"
