@@ -1,4 +1,6 @@
-usingnamespace @import("index.zig");
+const std = @import("std");
+const kernel = @import("kernel");
+const x86 = @import("x86");
 
 var stack: [*]usize = undefined; // Stack of free physical page.
 var stack_index: usize = 0; // Index into the stack.
@@ -11,13 +13,13 @@ pub inline fn pageAlign(address: u32) u32 {
     // 4095 -> 4096
     // 4096 -> 4096
     // 4097 -> 8192
-    return (address + PAGE_SIZE - 1) & (~PAGE_SIZE +% 1);
+    return (address + x86.PAGE_SIZE - 1) & (~x86.PAGE_SIZE +% 1);
 }
 
 // Return the amount of variable elements (in bytes).
 //
 pub fn available() usize {
-    return stack_index * PAGE_SIZE;
+    return stack_index * x86.PAGE_SIZE;
 }
 
 pub inline fn available_MiB() usize {
@@ -52,8 +54,8 @@ pub fn free(address: usize) void {
 //
 pub fn initialize(info: *const kernel.multiboot.MultibootInfo) void {
     // Ensure the bootloader has given us the memory map.
-    assert((info.flags & kernel.multiboot.MULTIBOOT_INFO_MEMORY) != 0);
-    assert((info.flags & kernel.multiboot.MULTIBOOT_INFO_MEM_MAP) != 0);
+    std.debug.assert((info.flags & kernel.multiboot.MULTIBOOT_INFO_MEMORY) != 0);
+    std.debug.assert((info.flags & kernel.multiboot.MULTIBOOT_INFO_MEM_MAP) != 0);
 
     // TODO: WHAT WHY WHAAAAT, must check back here later
     // Place stack at 0x200000 so that in the future I trigger a
@@ -64,7 +66,7 @@ pub fn initialize(info: *const kernel.multiboot.MultibootInfo) void {
     // stack = @intToPtr([*]usize, pageAlign(info.mods_addr));
 
     // Calculate the approximate size of the stack based on the amount of total upper memory.
-    stack_size = ((info.mem_upper * 1024) / PAGE_SIZE) * @sizeOf(usize);
+    stack_size = ((info.mem_upper * 1024) / x86.PAGE_SIZE) * @sizeOf(usize);
     stack_end = pageAlign(@ptrToInt(stack) + stack_size);
 
     var map: usize = info.mmap_addr;
@@ -78,17 +80,16 @@ pub fn initialize(info: *const kernel.multiboot.MultibootInfo) void {
         start = if (start >= stack_end) start else stack_end;
 
         // Flag all the pages in this memory area as free.
-        if (entry.type == kernel.multiboot.MULTIBOOT_MEMORY_AVAILABLE) while (start < end) : (start += PAGE_SIZE)
+        if (entry.type == kernel.multiboot.MULTIBOOT_MEMORY_AVAILABLE) while (start < end) : (start += x86.PAGE_SIZE)
             free(start);
 
         // Go to the next entry in the memory map.
         map += entry.size + @sizeOf(@TypeOf(entry.size));
     }
 
-    const a = available();
-    kernel.println("available memory: {d} MiB ", .{available() / 1024 / 1024});
+    kernel.vga.println("available memory: {d} MiB ", .{available() / 1024 / 1024});
 }
 
 pub fn format() void {
-    kernel.println("physframes left: {d} ({d} MiB)", .{ stack_index, available_MiB() });
+    kernel.vga.println("physframes left: {d} ({d} MiB)", .{ stack_index, available_MiB() });
 }

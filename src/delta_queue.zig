@@ -1,4 +1,5 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 
 /// DeltaQueue is a singly-linked list where each
 /// node has a counter. Each counter is relative

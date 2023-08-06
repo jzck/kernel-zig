@@ -1,7 +1,6 @@
-usingnamespace @import("index.zig");
-// const time = @import("time.zig");
-// const x86 = @import("arch/x86/index.zig");
-// const std = @import("std");
+const std = @import("std");
+const kernel = @import("index.zig");
+
 // Screen size.
 pub const VGA_WIDTH = 80;
 pub const VGA_HEIGHT = 25;
@@ -42,23 +41,26 @@ pub const VGAEntry = packed struct {
 
 // Enable hardware cursor.
 pub fn enableCursor() void {
-    outb(0x3D4, 0x0A);
-    outb(0x3D5, 0x00);
+    kernel.x86.io.outb(0x3D4, 0x0A);
+    kernel.x86.io.outb(0x3D5, 0x00);
 }
 
 // Disable hardware cursor.
 pub fn disableCursor() void {
-    outb(0x3D4, 0x0A);
-    outb(0x3D5, 1 << 5);
+    kernel.x86.io.outb(0x3D4, 0x0A);
+    kernel.x86.io.outb(0x3D5, 1 << 5);
 }
 
 const Errors = error{};
-pub fn print(comptime format: []const u8, args: var) void {
-    var a = std.fmt.format({}, Errors, printCallback, format, args);
+pub fn print(comptime format: []const u8, args: anytype) void {
+    try std.fmt.format(.{ .writeAll = printCallback }, format, args);
 }
-pub fn println(comptime format: []const u8, args: var) void {
-    var a = print(format ++ "\n", args);
+
+pub fn println(comptime format: []const u8, args: anytype) void {
+    print(format ++ "\n", args);
 }
+
+// const time = @import("time.zig");
 pub fn clear() void {
     vga.clear();
 }
@@ -73,11 +75,11 @@ pub fn topbar() void {
         vga.cursor = 0;
         vga.cursor_enabled = false;
 
-        time.uptime();
+        kernel.time.uptime();
         print(" | ", .{});
-        time.utilisation();
+        kernel.time.utilisation();
         print(" | ", .{});
-        task.format_short();
+        kernel.task.format_short();
         println("", .{});
 
         vga.cursor_enabled = true;
@@ -85,11 +87,11 @@ pub fn topbar() void {
         vga.background = bg;
         vga.foreground = fg;
 
-        task.usleep(50 * 1000) catch unreachable; // 60ms
+        kernel.task.usleep(50 * 1000) catch unreachable; // 60ms
     }
 }
 
-fn printCallback(context: void, string: []const u8) Errors!void {
+fn printCallback(string: []const u8) Errors!void {
     vga.writeString(string);
 }
 
@@ -182,10 +184,10 @@ const VGA = struct {
     // Use the software cursor as the source of truth.
     //
     pub fn updateCursor(self: *const VGA) void {
-        x86.outb(0x3D4, 0x0F);
-        x86.outb(0x3D5, @truncate(u8, self.cursor));
-        x86.outb(0x3D4, 0x0E);
-        x86.outb(0x3D5, @truncate(u8, self.cursor >> 8));
+        kernel.x86.io.outb(0x3D4, 0x0F);
+        kernel.x86.io.outb(0x3D5, @truncate(u8, self.cursor));
+        kernel.x86.io.outb(0x3D4, 0x0E);
+        kernel.x86.io.outb(0x3D5, @truncate(u8, self.cursor >> 8));
     }
 
     ////
@@ -195,11 +197,11 @@ const VGA = struct {
     pub fn fetchCursor(self: *VGA) void {
         var cursor: usize = 0;
 
-        x86.outb(0x3D4, 0x0E);
-        cursor |= usize(x86.inb(0x3D5)) << 8;
+        kernel.x86.io.outb(0x3D4, 0x0E);
+        cursor |= usize(kernel.x86.io.inb(0x3D5)) << 8;
 
-        x86.outb(0x3D4, 0x0F);
-        cursor |= x86.inb(0x3D5);
+        kernel.x86.outb(0x3D4, 0x0F);
+        cursor |= kernel.x86.io.inb(0x3D5);
 
         self.cursor = cursor;
     }

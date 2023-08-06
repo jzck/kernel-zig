@@ -1,4 +1,5 @@
-usingnamespace @import("index.zig");
+const kernel = @import("index.zig");
+const x86 = @import("x86");
 
 pub var offset_us: u64 = 0;
 pub var task_slice_remaining: u64 = 0;
@@ -8,14 +9,14 @@ pub fn increment() void {
 
     offset_us += tick; //global time counter
 
-    var should_preempt = task.wakeup_tick(tick);
+    var should_preempt = kernel.task.wakeup_tick(tick);
 
     if (task_slice_remaining != 0) {
         // There is a time slice length
         if (task_slice_remaining <= tick) should_preempt = true;
         if (task_slice_remaining > tick) task_slice_remaining -= tick;
     }
-    if (should_preempt) task.preempt();
+    if (should_preempt) kernel.task.preempt();
 }
 
 pub fn uptime() void {
@@ -23,9 +24,9 @@ pub fn uptime() void {
     const offset_s: u64 = offset_ms / 1000;
     offset_ms = @mod(offset_ms / 100, 10);
 
-    print("{}.{:.3}", .{ offset_s, offset_ms });
+    kernel.vga.print("{}.{:.3}", .{ offset_s, offset_ms });
 }
 
 pub fn utilisation() void {
-    print("{}%", .{100 * (offset_us - task.CPU_idle_time) / offset_us});
+    kernel.vga.print("{}%", .{100 * (offset_us - kernel.task.CPU_idle_time) / offset_us});
 }

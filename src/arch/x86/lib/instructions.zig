@@ -1,7 +1,7 @@
 pub inline fn ltr(desc: u16) void {
     asm volatile ("ltr %[desc]"
         :
-        : [desc] "r" (desc)
+        : [desc] "r" (desc),
     );
 }
 
@@ -30,18 +30,18 @@ pub inline fn int3() void {
 pub inline fn lidt(idtr: usize) void {
     asm volatile ("lidt (%[idtr])"
         :
-        : [idtr] "r" (idtr)
+        : [idtr] "r" (idtr),
     );
 }
 
 pub fn cr2() usize {
     return asm volatile ("movl %%cr2, %[result]"
-        : [result] "=r" (-> usize)
+        : [result] "=r" (-> usize),
     );
 }
 
 pub fn dr7() usize {
     return asm volatile ("movl %%dr7, %[result]"
-        : [result] "=r" (-> usize)
+        : [result] "=r" (-> usize),
     );
 }

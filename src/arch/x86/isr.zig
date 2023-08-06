@@ -1,4 +1,4 @@
-usingnamespace @import("index.zig");
+const idt = @import("idt.zig");
 
 // Interrupt Service Routines defined externally in assembly.
 extern fn isr0() void;
@@ -65,9 +65,9 @@ pub const Context = packed struct {
     esp: u32,
     ss: u32,
 
-    pub inline fn setReturnValue(self: *volatile Context, value: var) void {
-        self.registers.eax = if (@TypeOf(value) == bool) @boolToInt(value) else @intCast(u32, value);
-    }
+    // pub inline fn setReturnValue(self: *volatile Context, value: var) void {
+    //     self.registers.eax = if (@TypeOf(value) == bool) @boolToInt(value) else @intCast(u32, value);
+    // }
 };
 
 // Structure holding general purpose registers as saved by PUSHA.

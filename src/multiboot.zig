@@ -29,16 +29,16 @@ pub const MultibootInfo = packed struct {
     mods_count: u32,
     mods_addr: u32,
 
-    syms: extern union {
+    syms: packed union {
         // present if flags[4]
-        nlist: extern struct {
+        nlist: packed struct {
             tabsize: u32,
             strsize: u32,
             addr: u32,
             _reserved: u32,
         },
         // present if flags[5]
-        shdr: extern struct {
+        shdr: packed struct {
             num: u32,
             size: u32,
             addr: u32,
@@ -124,7 +124,7 @@ pub const MultibootModule = packed struct {
 };
 
 // Multiboot structure to be read by the bootloader.
-pub const MultibootHeader = packed struct {
+pub const MultibootHeader = extern struct {
     magic: u32, // Must be equal to header magic number.
     flags: u32, // Feature flags.
     checksum: u32, // Above fields plus this one must equal 0 mod 2^32.
