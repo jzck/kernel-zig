@@ -1,5 +1,7 @@
 # hobby kernel in zig
 
+# WARNING: this project was written for zig 0.5, it doesn't compile for future versions
+
 ![screenshot](screenshot.png)
 
 ### features
