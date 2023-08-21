@@ -58,32 +58,32 @@ pub fn initialize() void {
     x86.isr.install_exceptions();
     x86.isr.install_irqs();
     x86.isr.install_syscalls();
-    x86.interrupt.registerIRQ(0, kernel.time.increment);
-    x86.interrupt.registerIRQ(1, kernel.ps2.keyboard_handler);
-    x86.interrupt.register(1, debug_trap);
-    x86.interrupt.register(13, general_protection_fault);
-    x86.interrupt.register(14, page_fault);
+    // x86.interrupt.registerIRQ(0, kernel.time.increment);
+    // x86.interrupt.registerIRQ(1, kernel.ps2.keyboard_handler);
+    // x86.interrupt.register(1, debug_trap);
+    // x86.interrupt.register(13, general_protection_fault);
+    // x86.interrupt.register(14, page_fault);
 
     // load IDT
     x86.instr.lidt(@ptrToInt(&idtr));
 }
 
 fn general_protection_fault() void {
-    kernel.println("general protection fault", .{});
+    kernel.vga.println("general protection fault", .{});
     x86.instr.hang();
 }
 
 fn debug_trap() void {
-    kernel.println("debug fault/trap", .{});
-    kernel.println("dr7: 0b{b}", .{x86.instr.dr7()});
+    kernel.vga.println("debug fault/trap", .{});
+    kernel.vga.println("dr7: 0b{b}", .{x86.instr.dr7()});
 }
 
 fn page_fault() void {
     const vaddr = x86.instr.cr2();
-    kernel.println("cr2: 0x{x}", .{vaddr});
-    kernel.println("phy: 0x{x}", .{kernel.paging.translate(vaddr)});
-    kernel.println("pde: 0x{x} ({})", .{ kernel.paging.pde(vaddr), vaddr >> 22 });
-    kernel.println("pte: 0x{x} ({})", .{ kernel.paging.pte(vaddr), vaddr >> 12 });
+    kernel.vga.println("cr2: 0x{x}", .{vaddr});
+    kernel.vga.println("phy: 0x{x}", .{x86.paging.translate(vaddr)});
+    kernel.vga.println("pde: 0x{x} ({})", .{ x86.paging.pde(vaddr), vaddr >> 22 });
+    kernel.vga.println("pte: 0x{x} ({})", .{ x86.paging.pte(vaddr), vaddr >> 12 });
     // paging.format();
     x86.instr.hang();
 }

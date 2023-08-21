@@ -91,7 +91,7 @@ pub fn topbar() void {
     }
 }
 
-fn printCallback(string: []const u8) Errors!void {
+fn printCallback(string: []const u8) anyerror!void {
     vga.writeString(string);
 }
 

@@ -1,25 +1,27 @@
-pub usingnamespace @import("index.zig");
+const kernel = @import("kernel");
+const std = @import("std");
+const x86 = @import("x86");
 
 var boot_task = Task{ .tid = 0, .esp = 0x47, .state = .Running, .born = true };
 var tid_counter: u16 = 1;
 
 pub const TaskNode = std.TailQueue(*Task).Node;
-pub const SleepNode = DeltaQueue(*TaskNode).Node;
+pub const SleepNode = kernel.dq.DeltaQueue(*TaskNode).Node;
 
 pub var current_task: *TaskNode = &TaskNode.init(&boot_task);
 pub var cleaner_task: *TaskNode = undefined;
 pub var ready_tasks = std.TailQueue(*Task).init();
 pub var blocked_tasks = std.TailQueue(*Task).init();
 pub var terminated_tasks = std.TailQueue(*Task).init();
-pub var sleeping_tasks = DeltaQueue(*TaskNode).init();
+pub var sleeping_tasks = kernel.dq.DeltaQueue(*TaskNode).init();
 
 const STACK_SIZE = x86.PAGE_SIZE; // Size of thread stacks.
 
 var timer_last_count: u64 = 0;
 pub fn update_time_used() void {
-    const current_count = time.offset_us;
+    const current_count = kernel.time.offset_us;
     const elapsed = current_count - timer_last_count;
-    // if (current_task.data.tid == 1) println("{} adding {} time", current_task.data.tid, elapsed);
+    // if (current_task.data.tid == 1) kernel.vga.println("{} adding {} time", current_task.data.tid, elapsed);
     timer_last_count = current_count;
     current_task.data.time_used += elapsed;
 }
@@ -45,22 +47,22 @@ pub const Task = struct {
 
     pub fn create(entrypoint: usize) !*Task {
         // Allocate and initialize the thread structure.
-        var t = try vmem.allocator.create(Task);
-        errdefer vmem.allocator.destroy(t);
+        var t = try kernel.vmem.allocator.create(Task);
+        errdefer kernel.vmem.allocator.destroy(t);
 
         t.time_used = 0;
         t.state = .ReadyToRun;
         t.tid = tid_counter;
         tid_counter +%= 1;
-        assert(tid_counter != 0); //overflow
+        std.debug.assert(tid_counter != 0); //overflow
 
         // allocate a new stack
-        t.stack = try vmem.allocator.create([STACK_SIZE]u8);
+        t.stack = try kernel.vmem.allocator.create([STACK_SIZE]u8);
         t.esp = @ptrToInt(t.stack) + STACK_SIZE;
         // if the tasks rets from its main function, it will go to terminate
         // NOTE: if terminate is called this way it has an incorrect ebp!
         t.esp -= 4;
-        @intToPtr(*usize, t.esp).* = @ptrToInt(task.terminate);
+        @intToPtr(*usize, t.esp).* = @ptrToInt(terminate);
         // this will be what ret goes to
         t.esp -= 4;
         @intToPtr(*usize, t.esp).* = entrypoint;
@@ -72,8 +74,8 @@ pub const Task = struct {
     }
 
     pub fn destroy(self: *Task) void {
-        vmem.allocator.destroy(self.stack);
-        vmem.allocator.destroy(self);
+        kernel.vmem.allocator.destroy(self.stack);
+        kernel.vmem.allocator.destroy(self);
     }
 };
 
@@ -81,11 +83,11 @@ pub const Task = struct {
 extern fn switch_tasks(new_esp: usize, old_esp_addr: usize) void;
 
 pub fn new(entrypoint: usize) !*TaskNode {
-    task.lock_scheduler();
-    defer task.unlock_scheduler();
+    kernel.task.lock_scheduler();
+    defer kernel.task.unlock_scheduler();
 
-    const node = try vmem.allocator.create(TaskNode);
-    errdefer vmem.allocator.destroy(node);
+    const node = try kernel.vmem.allocator.create(TaskNode);
+    errdefer kernel.vmem.allocator.destroy(node);
 
     node.data = try Task.create(entrypoint);
     ready_tasks.prepend(node);
@@ -93,16 +95,16 @@ pub fn new(entrypoint: usize) !*TaskNode {
 }
 
 pub fn wakeup_tick(tick: usize) bool {
-    task.lock_scheduler();
-    defer task.unlock_scheduler();
+    kernel.task.lock_scheduler();
+    defer kernel.task.unlock_scheduler();
 
-    task.sleeping_tasks.decrement(tick);
+    kernel.task.sleeping_tasks.decrement(tick);
     var popped = false;
-    while (task.sleeping_tasks.popZero()) |sleepnode| {
+    while (kernel.task.sleeping_tasks.popZero()) |sleepnode| {
         const tasknode = sleepnode.data;
         tasknode.data.state = .ReadyToRun;
-        vmem.allocator.destroy(sleepnode);
-        task.ready_tasks.prepend(tasknode);
+        kernel.vmem.allocator.destroy(sleepnode);
+        ready_tasks.prepend(tasknode);
         popped = true;
     }
     return popped;
@@ -110,10 +112,10 @@ pub fn wakeup_tick(tick: usize) bool {
 
 // TODO: make a sleep without malloc
 pub fn usleep(usec: u64) !void {
-    assert(current_task.data.state == .Running);
+    std.debug.assert(current_task.data.state == .Running);
     update_time_used();
 
-    const node = try vmem.allocator.create(SleepNode);
+    const node = try kernel.vmem.allocator.create(SleepNode);
 
     lock_scheduler();
     defer unlock_scheduler();
@@ -126,9 +128,9 @@ pub fn usleep(usec: u64) !void {
 }
 
 pub fn block(state: TaskState) void {
-    assert(current_task.data.state == .Running);
-    assert(state != .Running);
-    assert(state != .ReadyToRun);
+    std.debug.assert(current_task.data.state == .Running);
+    std.debug.assert(state != .Running);
+    std.debug.assert(state != .ReadyToRun);
     update_time_used();
 
     // println("blocking {} as {}", current_task.data.tid, state);
@@ -161,7 +163,7 @@ pub fn unblock(node: *TaskNode) void {
 }
 
 pub fn terminate() noreturn {
-    assert(current_task.data.state == .Running);
+    std.debug.assert(current_task.data.state == .Running);
 
     lock_scheduler();
     current_task.data.state = .Terminated;
@@ -179,7 +181,7 @@ pub fn cleaner_loop() noreturn {
         if (terminated_tasks.popFirst()) |n| {
             notify("DESTROYING {}", .{n.data.tid});
             n.data.destroy();
-            vmem.allocator.destroy(n);
+            kernel.vmem.allocator.destroy(n);
         } else {
             notify("NOTHING TO CLEAN", .{});
             block(.Paused);
@@ -191,15 +193,15 @@ pub var IRQ_disable_counter: usize = 0;
 pub var postpone_task_switches_counter: isize = 0; // this counter can go negative when we are scheduling after a postpone
 pub var postpone_task_switches_flag: bool = false;
 fn lock_scheduler() void {
-    if (constants.SMP == false) {
-        x86.cli();
+    if (kernel.constants.SMP == false) {
+        x86.instr.cli();
         IRQ_disable_counter += 1;
         postpone_task_switches_counter += 1;
     }
 }
 fn unlock_scheduler() void {
-    if (constants.SMP == false) {
-        assert(IRQ_disable_counter > 0);
+    if (kernel.constants.SMP == false) {
+        std.debug.assert(IRQ_disable_counter > 0);
         postpone_task_switches_counter -= 1;
         if (postpone_task_switches_flag == true and postpone_task_switches_counter == 0) {
             postpone_task_switches_flag = false;
@@ -208,7 +210,7 @@ fn unlock_scheduler() void {
         }
         IRQ_disable_counter -= 1;
         // must be the last instruction because we do interrupts inside interrupts
-        if (IRQ_disable_counter == 0) x86.sti();
+        if (IRQ_disable_counter == 0) x86.instr.sti();
     }
 }
 
@@ -218,7 +220,7 @@ pub fn preempt() void {
     update_time_used();
     if (ready_tasks.first == null) {
         notify("NO PREEMPT SINGLE TASK", .{});
-        time.task_slice_remaining = 0;
+        kernel.time.task_slice_remaining = 0;
         return;
     }
 
@@ -234,8 +236,8 @@ pub fn preempt() void {
 //  - scheduler is locked
 //  - the tasks being switched to will unlock_scheduler()
 pub fn switch_to(chosen: *TaskNode) void {
-    assert(chosen.data.state == .ReadyToRun);
-    assert(current_task.data.state != .Running);
+    std.debug.assert(chosen.data.state == .ReadyToRun);
+    std.debug.assert(current_task.data.state != .Running);
 
     // save old stack
     const old_task_esp_addr = &current_task.data.esp;
@@ -243,8 +245,8 @@ pub fn switch_to(chosen: *TaskNode) void {
     // switch states
     chosen.data.state = .Running;
     current_task = chosen;
-    if (ready_tasks.first == null) time.task_slice_remaining = 0;
-    if (ready_tasks.first != null) time.task_slice_remaining = time.TASK_SLICE;
+    if (ready_tasks.first == null) kernel.time.task_slice_remaining = 0;
+    if (ready_tasks.first != null) kernel.time.task_slice_remaining = kernel.time.TASK_SLICE;
 
     // we don't have any startup code for tasks, so i do it here
     if (current_task.data.born == false) {
@@ -267,8 +269,8 @@ pub var CPU_idle_start_time: u64 = 0;
 //  unlock_scheduler should be called after
 //  current_task is blocked or running (preemption)
 pub fn schedule() void {
-    assert(IRQ_disable_counter > 0);
-    assert(current_task.data.state != .ReadyToRun);
+    std.debug.assert(IRQ_disable_counter > 0);
+    std.debug.assert(current_task.data.state != .ReadyToRun);
 
     // postponed
     if (postpone_task_switches_counter != 0 and current_task.data.state == .Running) {
@@ -291,7 +293,7 @@ pub fn schedule() void {
     // single task
     if (current_task.data.state == .Running) {
         notify("SINGLE TASK", .{});
-        time.task_slice_remaining = 0;
+        kernel.time.task_slice_remaining = 0;
         return;
     }
     // no tasks
@@ -299,21 +301,21 @@ pub fn schedule() void {
 }
 
 fn idle_mode() void {
-    assert(ready_tasks.first == null);
-    assert(current_task.data.state != .Running);
-    assert(current_task.data.state != .ReadyToRun);
+    std.debug.assert(ready_tasks.first == null);
+    std.debug.assert(current_task.data.state != .Running);
+    std.debug.assert(current_task.data.state != .ReadyToRun);
 
     notify("IDLE", .{});
 
     // borrow the current task
     const borrow = current_task;
 
-    CPU_idle_start_time = time.offset_us; //for power management
+    CPU_idle_start_time = kernel.time.offset_us; //for power management
 
     while (true) { // idle loop
         if (ready_tasks.popFirst()) |t| { // found a new task
-            CPU_idle_time += time.offset_us - CPU_idle_start_time; // count time as idle
-            timer_last_count = time.offset_us; // don't count time as used
+            CPU_idle_time += kernel.time.offset_us - CPU_idle_start_time; // count time as idle
+            timer_last_count = kernel.time.offset_us; // don't count time as used
             // println("went into idle mode for {}usecs", time.offset_us - CPU_idle_start_time);
 
             if (t == borrow) {
@@ -322,43 +324,43 @@ fn idle_mode() void {
             }
             return switch_to(t);
         } else { // no tasks ready, let the timer fire
-            x86.sti(); // enable interrupts to allow the timer to fire
-            x86.hlt(); // halt and wait for the timer to fire
-            x86.cli(); // disable interrupts again to see if there is something to do
+            x86.instr.sti(); // enable interrupts to allow the timer to fire
+            x86.instr.hlt(); // halt and wait for the timer to fire
+            x86.instr.cli(); // disable interrupts again to see if there is something to do
         }
     }
 }
 
-pub fn notify(comptime message: []const u8, args: var) void {
-    const bg = vga.background;
-    const fg = vga.foreground;
-    const cursor = vga.cursor;
-    vga.background = fg;
-    vga.foreground = bg;
-    vga.cursor = 80 - message.len;
-    vga.cursor_enabled = false;
+pub fn notify(comptime message: []const u8, args: anytype) void {
+    const bg = kernel.vga.background;
+    const fg = kernel.vga.foreground;
+    const cursor = kernel.vga.cursor;
+    kernel.vga.background = fg;
+    kernel.vga.foreground = bg;
+    kernel.vga.cursor = 80 - message.len;
+    kernel.vga.cursor_enabled = false;
 
-    print(message, args);
+    kernel.vga.print(message, args);
 
-    vga.cursor_enabled = true;
-    vga.cursor = cursor;
-    vga.background = bg;
-    vga.foreground = fg;
+    kernel.vga.cursor_enabled = true;
+    kernel.vga.cursor = cursor;
+    kernel.vga.background = bg;
+    kernel.vga.foreground = fg;
 }
 
 pub fn format_short() void {
-    print("{}R {}B {}S", .{ ready_tasks.len, blocked_tasks.len, sleeping_tasks.len });
+    kernel.vga.print("{}R {}B {}S", .{ ready_tasks.len, blocked_tasks.len, sleeping_tasks.len });
 }
 
 pub fn format() void {
     update_time_used();
 
-    println("{}", .{current_task.data});
+    kernel.vga.println("{}", .{current_task.data});
 
     var it = ready_tasks.first;
-    while (it) |node| : (it = node.next) println("{}", .{node.data});
+    while (it) |node| : (it = node.next) kernel.vga.println("{}", .{node.data});
     it = blocked_tasks.first;
-    while (it) |node| : (it = node.next) println("{}", .{node.data});
+    while (it) |node| : (it = node.next) kernel.vga.println("{}", .{node.data});
     var sit = sleeping_tasks.first;
-    while (sit) |node| : (sit = node.next) println("{} {}", .{ node.data.data, node.counter });
+    while (sit) |node| : (sit = node.next) kernel.vga.println("{} {}", .{ node.data.data, node.counter });
 }

@@ -1,6 +1,6 @@
-pub usingnamespace @import("../common.zig");
+// pub usingnamespace @import("../common.zig");
 
-pub const kernel = @import("../index.zig");
+// pub const kernel = @import("../index.zig");
 
 pub const x86 = @import("../arch/x86/index.zig");
 

@@ -1,5 +1,5 @@
 usingnamespace @import("index.zig");
-// const x86 = @import("x86");
+const x86 = @import("x86");
 
 const PS2_DATA = 0x60;
 const PS2_STATUS = 0x64;
@@ -67,8 +67,8 @@ const KEYMAP_US = [_][]const u8{
 
 fn ps2_scancode() u8 {
     var scancode: u8 = 0;
-    while (true) if (x86.inb(PS2_DATA) != scancode) {
-        scancode = x86.inb(PS2_DATA);
+    while (true) if (x86.io.inb(PS2_DATA) != scancode) {
+        scancode = x86.io.inb(PS2_DATA);
         if (scancode > 0) return scancode;
     };
 }

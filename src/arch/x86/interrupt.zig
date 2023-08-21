@@ -31,7 +31,7 @@ const IRQ_15 = IRQ_0 + 15;
 const SYSCALL = 128;
 
 // Registered interrupt handlers. (see x86.isr.s)
-var handlers = [_]fn () void{unhandled} ** 48;
+const handlers = [_]fn () void{unhandled} ** 48;
 // Registered IRQ subscribers. (see x86.isr.s)
 // var irq_subscribers = []MailboxId{MailboxId.Kernel} ** 16;
 
@@ -130,11 +130,11 @@ inline fn endOfInterrupt(irq: u8) void {
     }
 }
 
-pub fn register(n: u8, handler: fn () void) void {
+pub fn register(n: u8, comptime handler: fn () void) void {
     handlers[n] = handler;
 }
 
-pub fn registerIRQ(irq: u8, handler: fn () void) void {
+pub fn registerIRQ(irq: u8, comptime handler: fn () void) void {
     register(IRQ_0 + irq, handler);
     maskIRQ(irq, false); // Unmask the IRQ.
 }

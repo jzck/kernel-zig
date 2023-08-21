@@ -1,6 +1,8 @@
-pub usingnamespace @import("../index.zig");
-pub const virtio = @import("virtio.zig");
-pub const ide = @import("ide.zig");
+pub const std = @import("std");
+
+pub const kernel = @import("index.zig");
+pub const x86 = @import("x86.zig");
+pub const driver = @import("driver/index.zig");
 
 const PCI_CONFIG_ADDRESS = 0xCF8;
 const PCI_CONFIG_DATA = 0xCFC;
@@ -41,10 +43,10 @@ pub const PciDevice = struct {
     }
 
     pub fn format(self: PciDevice) void {
-        print("{}:{}.{}", .{ self.bus, self.slot, self.function });
-        print(" {x},{x:2}", .{ self.class(), self.subclass() });
-        print(" 0x{x} 0x{x}", .{ self.vendor, self.device() });
-        println(" {}", .{if (self.driver()) |d| d.name else " (none)"});
+        kernel.vga.print("{}:{}.{}", .{ self.bus, self.slot, self.function });
+        kernel.vga.print(" {x},{x:2}", .{ self.class(), self.subclass() });
+        kernel.vga.print(" 0x{x} 0x{x}", .{ self.vendor, self.device() });
+        kernel.vga.println(" {}", .{if (self.driver()) |d| d.name else " (none)"});
     }
 
     pub fn driver(self: PciDevice) ?Driver {
@@ -94,7 +96,7 @@ pub const PciDevice = struct {
         return self.config_read(u8, 0x3c);
     }
     pub fn bar(self: PciDevice, comptime n: usize) u32 {
-        assert(n <= 5);
+        std.debug.assert(n <= 5);
         return self.config_read(u32, 0x10 + 4 * n);
     }
     // only for header_type == 0
@@ -102,7 +104,7 @@ pub const PciDevice = struct {
         return self.config_read(u8, 0x2e);
     }
 
-    pub inline fn config_write(self: PciDevice, value: var, comptime offset: u8) void {
+    pub inline fn config_write(self: PciDevice, value: anytype, comptime offset: u8) void {
         // ask for access before writing config
         x86.outl(PCI_CONFIG_ADDRESS, self.address(offset));
         switch (@TypeOf(value)) {
@@ -172,7 +174,7 @@ pub fn scan() void {
 
 pub fn lspci() void {
     var slot: u5 = 0;
-    println("b:s.f c, s vendor device driver", .{});
+    kernel.vga.println("b:s.f c, s vendor device driver", .{});
     while (slot < 31) : (slot += 1) {
         if (PciDevice.init(0, slot, 0)) |dev| {
             var function: u3 = 0;
